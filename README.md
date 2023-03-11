@@ -5,9 +5,13 @@ To get started, download the ZIP file for the current year, or download each fil
 
 ---Recommended startup steps---
 
-2023:\n
-  -Download ZIP\n
-  -Extract files to the same location\n
-  -Run fin2023.py\n
+2023:
+
+  -Download ZIP
+  
+  -Extract files to the same location
+  
+  -Run fin2023.py
+  
   -First run the "presets" function within the program, then run "init".
   
