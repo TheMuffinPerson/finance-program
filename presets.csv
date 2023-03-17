@@ -1,0 +1,10 @@
+filepath,'2023_transaction_history.csv'
+checkFilename,'2023_balance_checks.csv'
+paycheckFilename,'2023_income.csv'
+accounts,['filler']
+budgets,['filler']
+employer,''
+paycheck_split,[1]
+round_budget,''
+monthly_rent,0
+monthly_internet,0
