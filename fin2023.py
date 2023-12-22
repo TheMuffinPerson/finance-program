@@ -1114,6 +1114,8 @@ def paycheck(amount, filename=presets['filepath'], paycheckFile=presets['paychec
     #ask for input
     paydate = input("Date of paycheck (MM-DD): ")
     paydate = checkInput(paydate,"date")
+    paycheck_account = input("Account the paycheck is in: ")
+    paycheck_account = checkInput(paycheck_account, "account")
     if paydate is None:
         return
     
@@ -1159,7 +1161,7 @@ def paycheck(amount, filename=presets['filepath'], paycheckFile=presets['paychec
         i = 0
         for split in total:
             if split != 0:
-                file = pandas_append(file, ["paycheck","mit-sa",budgets[i],split], 
+                file = pandas_append(file, ["paycheck",paycheck_account,budgets[i],split], 
                                      paydate, "date")
                 file.to_csv(filename)
                 
