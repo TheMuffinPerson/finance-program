@@ -69,16 +69,6 @@ global today, presets
 today = str(date.today())[5:]
 presets = loadPresets(presetsFilepath)
 
-"""
-suggestions:
-    -let it run from the file explorer
-    -fix sorting--still not stable (just change to radix/tuple sort)
-    -add "company" option? destination company
-    -make date possible w/o 0 by finding index of hyphen
-    -"add from future spending?" option (personal)
-    -personal - add Crunchyroll sub to weekly checks
-"""
-
 #each row of a csv is returned as a list of string elements
 class transaction:
     def __init__(self, row):#row is a list
