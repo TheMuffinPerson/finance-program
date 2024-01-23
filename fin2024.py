@@ -385,44 +385,45 @@ def checkInput(inp,typ,all_bool=False):
         count = 0
         while fail:
             fail = False
-            try:
-                #if too short, assume lower month
-                if len(inp) == 4:
-                    inp = "0"+inp
-                
-                #wrong length
-                if len(inp) != 5:
-                    fail = True
-                    print("Please enter a date in the format MM-DD (it should be 5 characters long!).")
-                
-                #no hyphen
-                if inp[2] != "-" and not fail:
-                    fail = True
-                    print("Please enter a date in the format MM-DD (there should be a hyphen in the middle!).")
+            #find the index of the hyphen
+            hyphen_i = inp.find('-')
+
+            if hyphen_i < 0:#no hyphen
+                #check for slash
+                hyphen_i = inp.find('/')
+            
+            if hyphen_i < 0:#no slash and no hyphen
+                fail = True
+                print("Please include a hyphen separating month and day! (e.g. 11-10 for Nov. 10th)")
+
+            else:
+                try:
+                    #check before hyphen for month format
+                    month = int(inp[0:hyphen_i])
+                    if month < 1 or month > 12:
+                        print("Please enter a month between 1 and 12.")
+                        fail = True
                     
-                #month out of range
-                if (int(inp[:2]) < 1 or int(inp[:2]) > 12) and not fail:
-                    fail = True
-                    print("Please enter a valid month.")
+                    #check after hyphen for day format
+                    day = int(inp[hyphen_i+1:])
+                    if day < 1 or day > 31:
+                        print("Please enter a valid day of the month (between 1 and 31).")
+                        fail = True
                 
-                #day out of range
-                if (int(inp[3:]) < 1 or int(inp[3:]) > 31) and not fail:
+                except ValueError:
+                    #if they entered letters
+                    count += 1
                     fail = True
-                    print("Please enter a valid day.")
-            
-            except ValueError:
-                #if they entered letters
-                count += 1
-                fail = True
-                print("Please only enter digits and a hyphen.")
-                if count >= 3:
-                    print("Like, dude, why you keep entering letters and stuff??")
-            
-            except IndexError:
-                fail = True
-            
+                    print("Please only enter digits and a hyphen.")
+                    if count >= 3:
+                        print("Like, dude, why you keep entering letters and stuff??")
+
             if fail:
                 inp = input("Date (MM-DD): ")
+
+        #now reformat if needed so it's actually MM-DD format
+        #currently month and day are each a proper int
+        inp = str(month).zfill(2) + '-' + str(day).zfill(2)
                                
     elif typ == "name":
         fail = True
