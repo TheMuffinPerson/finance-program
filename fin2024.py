@@ -563,20 +563,28 @@ def init():
     print("Okay! First thing you need to do is let me know how much money is in each",\
           "account and budget.")
     
+    print("First are your accounts.")
     acct_amts = askEach(presets['accounts'])
+    printLine()
+    print("Now are the budgets.")
     budg_amts = askEach(presets['budgets'])
     
     #make sure total for accounts == total for budgets
-    sum_acct = sum(acct_amts)
-    sum_budg = sum(budg_amts)
+    sum_acct = round(sum(acct_amts), 2)
+    sum_budg = round(sum(budg_amts), 2)
     while sum_acct != sum_budg:
         print("The amounts in your accounts is not equal to the amounts in your budgets.",\
               f"Total in accounts is {sum_acct}, while total in budgets is {sum_budg}.",\
               "Please try again.")
+        #ask again
+        print("First are your accounts.")
         acct_amts = askEach(presets['accounts'])
+        printLine()
+        print("Now are the budgets.")
+
         budg_amts = askEach(presets['budgets'])
-        sum_acct = sum(acct_amts)
-        sum_budg = sum(budg_amts)
+        sum_acct = round(sum(acct_amts), 2)
+        sum_budg = round(sum(budg_amts), 2)
     
     #create transactions to init accounts
     for i, amt in enumerate(acct_amts):
@@ -591,12 +599,7 @@ def init():
         data_to = [today, 'init', 'null', presets['budgets'][i], amt]
         writeTransfer(data_from, data_to)
     
-    #check with user that account totals are correct
-    printLine()
-    print("It's all in the file now! Let's just make sure that the account totals",\
-          "match.")
-    transactionList = filepathToTransactionList()
-    checkBalances(transactionList)
+    print("It's all added to the file now!")
 
 def checkBalances(transactionList, checkFilepath=presets['checkFilename']):
     """
