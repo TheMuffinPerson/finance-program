@@ -558,6 +558,8 @@ def init():
     -------
     None
     """
+    #DEBUG - exit doesn't work properly in this function
+
     #ask for values for accounts and for budgets
     printLine()
     print("Okay! First thing you need to do is let me know how much money is in each",\
@@ -791,6 +793,8 @@ def changePresets(filepath=presetsFilepath):
     None.
 
     """
+    print("presets dict is",presets)
+
     printLine()
     #show list of preset variables
     for var in presets:
@@ -803,37 +807,71 @@ def changePresets(filepath=presetsFilepath):
     
     for variable in to_change:
         #check input
-        try:
-            og_value = presets[variable]
-        except KeyError:
-            while variable not in presets:
-                variable = input(f"{variable} not found in presets. Please enter "\
-                                 "a valid preset name, or type 'skip' to move on. ").lower()
-                if variable == 'skip':
-                    break
-                
-            if variable != 'skip':
-                og_value = presets[variable]
-        
+        while variable not in presets:
+            variable = input(f"{variable} not found in presets. Please enter "\
+                    "a valid preset name, or type 'skip' to move on: ").lower()
+            if variable == 'skip':
+                break
+
+    for variable in to_change:
+        print("doing variable",variable)
         if variable == 'skip':
             continue
+
+        og_value = presets[variable]#get original value
+        print("og_value is",og_value)
+        print("og_value type is",type(og_value))
         
         printLine()
         print(f"Working on changing {variable}.")
         
-        if not isinstance(og_value, list):#if value is a single item
+        if not isinstance(og_value, list):
+            #if value is a single item
+            #includes everything except accounts, budgets, and paycheck_split
+
+            #for files, could print a list of possible files (csv) in the local directory.
+            #would then make adding the file extension unnecessary, check at the end of this chunk could be removed
+            #all names of the presets might want a review. filepath in particular is confusing
+
             print(f'Current setting is {og_value}.')
-            new = input(f'Please enter the desired {variable.replace("_", " ")}: ')
-            #do a checkInput on this depending on type of variable
+            new = input(f'Please enter the desired {variable.replace("_", " ")}: ')#if formatting this way, should change camel case ones to underscores
+
+            #change checkInput type depending on the variable
+            #str
             if isinstance(og_value, str):
                 if og_value[-4:] == ".csv":
-                    presets[variable] = checkInput(new, 'csv')
+                    inputType = 'csv'#can you automatically add .csv at the end in checkInput if it's not there?
+                elif variable == 'paycheck_account':
+                    inputType = 'account'
+                elif variable == 'round_budget':
+                    inputType = 'budget'
                 else:
-                    presets[variable] = new
+                    inputType = 'name'
+            #int
+            else:
+                inputType = 'amount'
+
+            presets[variable] = checkInput(new, inputType)
+
+            #should check if the file is already being used for a previously set filepath.
+            #not one that user set to be changed during this run, though
                     
+        #no exit option
+        #issue -- if you change the accounts and in the same command change the paycheck account, 
+        # you could set the paycheck_account to an account that no longer exists. Should update the
+        # list of accounts and budgets after they are updated by the user
+
+        #should probably make more detailed instructions for each preset, so I know what I'm changing
+        # Especially w/ the phrasing "desired". Sure I want my rent to be low lol
+
+        #should also check for duplicates when checking input
+
         else:#value is a list
             #paycheck_split gets special case
             if variable == 'paycheck_split':
+                #this threw an error. starting paycheck_split did not match the amount of budgets.
+                # could add a check for that and add 0 for ones that don't have them, particularly
+                # if budgets have just been modified
                 budgets = presets['budgets']
                 
                 #show preexisting data
@@ -856,7 +894,7 @@ def changePresets(filepath=presetsFilepath):
                     for budg in budgs_inp:
                         budgs.append(checkInput(budg, 'budget'))
                     
-                    #convert accounts to indices
+                    #convert budgets to indices
                     budgs_i = []
                     for budg in budgs:
                         budgs_i.append(budgets.index(budg))
@@ -871,12 +909,16 @@ def changePresets(filepath=presetsFilepath):
                         new_values[budg_i] = new
                     
                     #check that it totals to 1
-                    if abs(sum(new_values) - 1) > .0001:#account for float error
+                    if abs(sum(new_values) - 1) > .0001:#account for float error - does this work?? I would try rounding maybe
                         print("These values don't seem to sum to 1! Please re-enter.\n"\
-                              "(If they do and this seems to be an error, please let Dani know.)")
+                              "(If they do and this seems to be an error, please let Dani know.)")#remove disclaimer lol
                         adds = False
+                        #when this happens, it makes you re-enter the mistyped budgets. Fix that
                     else:
                         adds = True
+
+                presets['paycheck_split'] = new_values
+                print("new_values is",new_values)
                 
             #handle other lists
             else:
@@ -886,6 +928,7 @@ def changePresets(filepath=presetsFilepath):
                     print(val)
                 
                 #options are add, remove, or modify
+                print("\nYou can add, remove, or modify accounts.")
                 #add
                 add = input(f"Would you like to add any {variable}? Y/N ").lower()
                 if add == 'y' or add == 'yes' or add == 'yee':
@@ -896,7 +939,7 @@ def changePresets(filepath=presetsFilepath):
                         new.append(n.strip())
                     
                     for name in new:
-                        #make sure it's a new name
+                        #make sure it's a new name #DID NOT DEBUG CHECK THIS
                         while name in og_value:
                             name = input(f"{name} is already in {variable}! Please enter a "\
                                          "different name, or enter 'skip' to move on: ").lower()
@@ -920,16 +963,16 @@ def changePresets(filepath=presetsFilepath):
                         print(item)
                 
                 #remove
-                rem = input(f"Would you like to remove one of the above {variable}? Y/N ").lower()
+                rem = input(f"\nWould you like to remove one of the above {variable}? Y/N ").lower()
                 if rem == 'y' or rem == 'yes' or rem == 'yee':
-                    rem_raw = input(f"Please enter the names of the new {variable} you "\
+                    rem_raw = input(f"Please enter the names of the {variable} you "\
                                 "would like to remove, separated by commas: ").split(",")
                     rem = []
                     for r in rem_raw:
                         rem.append(r.strip())
                     
                     for name in rem:
-                        #make sure it's an existing name
+                        #make sure it's an existing name #DID NOT DEBUG CHECK THIS
                         while name not in og_value:
                             name = input(f"{name} is not in {variable}! Please enter an "\
                                          "existing name, or enter 'skip' to move on: ").lower()
@@ -948,7 +991,7 @@ def changePresets(filepath=presetsFilepath):
                             print(item)
                 
                 #modify
-                mod = input(f"Would you like to modify one of the above {variable}? Y/N ").lower()
+                mod = input(f"\nWould you like to modify one of the above {variable}? Y/N ").lower()
                 if mod == 'y' or mod == 'yes' or mod == 'yee':
                     mod_raw = input(f"Please enter the names of the {variable} you "\
                                 "would like to modify, separated by commas: ").split(",")
@@ -986,8 +1029,9 @@ def changePresets(filepath=presetsFilepath):
                         presets[variable][index] = new_name
                         og_value = presets[variable]#reset for later iterations
                         
-                        
-        #after modifying everything in presets dict, write new information to file
+        print("writing to file")
+        print("presets dict is",presets)
+        #after modifying each variable in presets dict, write new information to file
         #(restart from scratch and use pandas to create csv)
         
         #put in expected format
