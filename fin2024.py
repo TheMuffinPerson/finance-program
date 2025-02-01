@@ -48,8 +48,8 @@ def loadPresets(filename=presetsFilepath):
             
         elif val[0] == "[":#list
             L = val[1:-1].split(";")
-            val = []
-            #all elements can be str or float            ### :)
+            val = []            ### :)
+            #all elements can be str or float
             if L[0][0] == "'":#single quotation = string
                 for el in L:
                     val.append(str(el[1:-1]).strip("'"))#strip is in case there was a leading space
@@ -201,7 +201,7 @@ def convertToClass(file, income=False):
     return transactions
 
 
-def filepathToTransactionList(filename=presets['filepath'], income=False):
+def filepathToTransactionList(filename=presets['transactions_file'], income=False):
     """
     takes in a filepath and converts it into a list of transaction objects
     (or income objects if income is True)
@@ -523,10 +523,6 @@ def checkInput(inp,typ,all_bool=False):
                 found = True
     
             except FileNotFoundError:
-                # if inp[-4:] != ".csv":
-                #     while inp[-4:] != ".csv":
-                #         print(f"{inp} does not end in '.csv'. Please enter the name of a .csv file.")
-                #         inp = input("Filename: ")
                 print(f"{inp} was not found in the local file. Please enter the name of a csv file",\
                     "or filepath in the local directory.")
                 inp = input("Filename: ")
@@ -608,7 +604,7 @@ def init():
     
     print("It's all added to the file now!")
 
-def checkBalances(transactionList, checkFilepath=presets['checkFilename']):
+def checkBalances(transactionList, checkFilepath=presets['balance_checks_file']):
     """
     checks that personal records and bank records match, from list of transactions
     and filepath for the file to be written to
@@ -666,7 +662,7 @@ def checkBalances(transactionList, checkFilepath=presets['checkFilename']):
         checkFile.to_csv(checkFilepath)
 
 
-def checkCash(checkFilepath=presets['checkFilename']):
+def checkCash(checkFilepath=presets['balance_checks_file']):
     """
     checks the the counted cash total is the same as recorded
 
@@ -707,7 +703,7 @@ def checkCash(checkFilepath=presets['checkFilename']):
         checkFile.to_csv(checkFilepath)
 
 
-def sort(filename=presets['filepath']):
+def sort(filename=presets['transactions_file']):
     """
     sorts the csv file by date (using built-in pandas mergesort), writes it to the file
 
@@ -755,7 +751,7 @@ def pandas_append(file, data, name, index):
     file = pandas.concat([file, lineSeries.to_frame().T])
     return file.rename_axis(index, axis=0) # set name of index to date
     
-def writeTransaction(line, filename=presets['filepath']):
+def writeTransaction(line, filename=presets['transactions_file']):
     """
     takes a transaction (as a list) and adds it to the end of a csv file, and sorts file by date
     
@@ -798,7 +794,28 @@ def changePresets(filepath=presetsFilepath):
     None.
 
     """
-    print("presets dict is",presets)
+    print("presets dict is",presets)#debug
+
+    instructions = {
+        "transactions_file": "The transactions file is the file that all transactions are "\
+            "recorded in.",
+        "balance_checks_file": "The balance checks file is the file that records the balance "\
+            "of your accounts every time you check that they match your records, and the "\
+            "date it was checked.",
+        "income_record_file": "The income record file is the file that records your income.",
+        "accounts": "Accounts is a list of your accounts.",
+        "budgets": "Budgets is a list of your budgets.",
+        "employer": "The employer is the name you give to the source of your income.",
+        "paycheck_account": "The paycheck account is which account, from your list, you "\
+            "have your paycheck deposited into.",
+        "paycheck_split": "The paycheck split is how you want your paycheck to be divided "\
+            "among the budgets you have set, represented as a decimal amount for each budget.",
+        "round_budget": "The round budget comes into play after your paycheck is divided "\
+            "among your budgets. In the case that the total doesn't equal your actual "\
+            "paycheck due to rounding, the amount needed in order for it to add correctly "\
+            "will be taken from or added to the budget you set here.",
+        "monthly_rent": "The monthly rent is the amount you pay per month for rent.",
+        "monthly_internet": "The monthly internet is the amount you pay per month for internet."}
 
     printLine()
     #show list of preset variables
@@ -824,33 +841,33 @@ def changePresets(filepath=presetsFilepath):
             continue
 
         og_value = presets[variable]#get original value
-        print("og_value is",og_value)
-        print("og_value type is",type(og_value))
+        print("og_value is",og_value)#debug
+        print("og_value type is",type(og_value))#debug
         
         printLine()
         print(f"Working on changing {variable}.")
+        print(instructions[variable])#give a brief explanation of the variable
         
         if not isinstance(og_value, list):
             #if value is a single item
             #includes everything except accounts, budgets, and paycheck_split
 
-            if variable in ["filepath", "checkFilename", "paycheckFilename"]:
+            #if it's a csv filename, print possible files in the local directory
+            if isinstance(og_value, str) and og_value[-4:] == ".csv":
                 files = glob.glob("*.csv")
                 print("The available csv files in the current folder are:")
                 for file in files:
                     if file != "presets.csv":#don't want to list itself as an option
                         print("\t",file)
 
-            #all names of the presets might want a review. filepath in particular is confusing
-
             print(f'Current setting is {og_value}.')
-            new = input(f'Please enter the desired {variable.replace("_", " ")}: ')#if formatting this way, should change camel case ones to underscores
+            new = input(f'Please enter the desired {variable.replace("_", " ")}: ')
 
             #change checkInput type depending on the variable
             #str
             if isinstance(og_value, str):
                 if og_value[-4:] == ".csv":
-                    inputType = 'csv'#can you automatically add .csv at the end in checkInput if it's not there?
+                    inputType = 'csv'
                 elif variable == 'paycheck_account':
                     inputType = 'account'
                 elif variable == 'round_budget':
@@ -902,7 +919,9 @@ def changePresets(filepath=presetsFilepath):
                     #correct/check input
                     budgs = []
                     for budg in budgs_inp:
-                        budgs.append(checkInput(budg, 'budget'))
+                        budg = checkInput(budg, 'budget')
+                        if budg != 'null':
+                            budgs.append(budg)
                     
                     #convert budgets to indices
                     budgs_i = []
@@ -1039,8 +1058,8 @@ def changePresets(filepath=presetsFilepath):
                         presets[variable][index] = new_name
                         og_value = presets[variable]#reset for later iterations
                         
-        print("writing to file")
-        print("presets dict is",presets)
+        print("writing to file")#debug
+        print("presets dict is",presets)#debug
         #after modifying each variable in presets dict, write new information to file
         #(restart from scratch and use pandas to create csv)
         
@@ -1085,7 +1104,7 @@ def writeTransfer(start, end):
     writeTransaction(end)
 
 
-def transfer(filename=presets['filepath']):
+def transfer(filename=presets['transactions_file']):
     """
     asks for transfer information and adds it to the record as 2 separate transactions,
     without changing total amount
@@ -1142,7 +1161,7 @@ def transfer(filename=presets['filepath']):
                   [date,name,account_to,budget_to,amount])
     
 
-def paycheck(amount, filename=presets['filepath'], paycheckFile=presets['paycheckFilename']):
+def paycheck(amount, filename=presets['transactions_file'], paycheckFile=presets['income_record_file']):
     """
     adds paycheck balance, split up into different budgets, to csv transaction file
 
@@ -1264,7 +1283,7 @@ def getTransaction():
     return [date, name, account, budget, amount]
 
 
-def weekly(filename=presets['filepath']):
+def weekly(filename=presets['transactions_file']):
     """
     goes through the weekly routine (now called 'checkup')
 
@@ -1534,7 +1553,7 @@ def __main__():
                 sort()
         
         elif entry == "income":
-            incomeList = filepathToTransactionList(presets['paycheckFilename'], True)
+            incomeList = filepathToTransactionList(presets['income_record_file'], True)
             
             filterType = input("How would you like to filter the list?  ")
             filterType = filterType.lower()

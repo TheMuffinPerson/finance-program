@@ -1,6 +1,6 @@
-filepath,'2024_transaction_history.csv'
-checkFilename,'2024_balance_checks.csv'
-paycheckFilename,'2024_income.csv'
+transactions_file,'2024_transaction_history.csv'
+balance_checks_file,'2024_balance_checks.csv'
+income_record_file,'2024_income.csv'
 accounts,['filler']
 budgets,['filler']
 employer,''
