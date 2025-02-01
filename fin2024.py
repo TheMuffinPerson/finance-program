@@ -10,6 +10,7 @@ Financial records 2023
 global presetsFilepath
 presetsFilepath = 'presets.csv'
 
+import glob
 import pandas
 from datetime import date
 
@@ -510,21 +511,25 @@ def checkInput(inp,typ,all_bool=False):
                 
     elif typ == "csv":
         found = False
+
         while not found:
+            #add .csv extension if not there
+            if inp[-4:] != ".csv":
+                inp = inp + ".csv"
+
             try:
                 f = open(inp)
                 f.close()
                 found = True
     
             except FileNotFoundError:
-                if inp[-4:] != ".csv":
-                    while inp[-4:] != ".csv":
-                        print(f"{inp} does not end in '.csv'. Please enter the name of a .csv file.")
-                        inp = input("Filename: ")
-                else:#a csv name, but still not found
-                    print(f"{inp} was not found in the local file. Please enter the name of a file",\
-                          "or filepath in the local directory.")
-                    inp = input("Filename: ")
+                # if inp[-4:] != ".csv":
+                #     while inp[-4:] != ".csv":
+                #         print(f"{inp} does not end in '.csv'. Please enter the name of a .csv file.")
+                #         inp = input("Filename: ")
+                print(f"{inp} was not found in the local file. Please enter the name of a csv file",\
+                    "or filepath in the local directory.")
+                inp = input("Filename: ")
     
     return inp
 
@@ -798,7 +803,7 @@ def changePresets(filepath=presetsFilepath):
     printLine()
     #show list of preset variables
     for var in presets:
-        print(var)
+        print("\t",var)
     
     #ask which to change
     inp = input("Please enter the names of each of the presets, from the list above, "\
@@ -829,8 +834,13 @@ def changePresets(filepath=presetsFilepath):
             #if value is a single item
             #includes everything except accounts, budgets, and paycheck_split
 
-            #for files, could print a list of possible files (csv) in the local directory.
-            #would then make adding the file extension unnecessary, check at the end of this chunk could be removed
+            if variable in ["filepath", "checkFilename", "paycheckFilename"]:
+                files = glob.glob("*.csv")
+                print("The available csv files in the current folder are:")
+                for file in files:
+                    if file != "presets.csv":#don't want to list itself as an option
+                        print("\t",file)
+
             #all names of the presets might want a review. filepath in particular is confusing
 
             print(f'Current setting is {og_value}.')
