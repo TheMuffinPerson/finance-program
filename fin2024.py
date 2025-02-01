@@ -794,8 +794,6 @@ def changePresets(filepath=presetsFilepath):
     None.
 
     """
-    print("presets dict is",presets)#debug
-
     instructions = {
         "transactions_file": "The transactions file is the file that all transactions are "\
             "recorded in.",
@@ -835,8 +833,8 @@ def changePresets(filepath=presetsFilepath):
             if variable == 'skip':
                 break
 
-    for variable in to_change:
-        print("doing variable",variable)
+    for i, variable in enumerate(to_change):
+        print("doing variable",variable)#debug
         if variable == 'skip':
             continue
 
@@ -861,7 +859,7 @@ def changePresets(filepath=presetsFilepath):
                         print("\t",file)
 
             print(f'Current setting is {og_value}.')
-            new = input(f'Please enter the desired {variable.replace("_", " ")}: ')
+            new = input(f'Please enter the new {variable.replace("_", " ")}: ')
 
             #change checkInput type depending on the variable
             #str
@@ -884,22 +882,24 @@ def changePresets(filepath=presetsFilepath):
             #not one that user set to be changed during this run, though
                     
         #no exit option
-        #issue -- if you change the accounts and in the same command change the paycheck account, 
-        # you could set the paycheck_account to an account that no longer exists. Should update the
-        # list of accounts and budgets after they are updated by the user
-
-        #should probably make more detailed instructions for each preset, so I know what I'm changing
-        # Especially w/ the phrasing "desired". Sure I want my rent to be low lol
 
         #should also check for duplicates when checking input
 
         else:#value is a list
             #paycheck_split gets special case
             if variable == 'paycheck_split':
-                #this threw an error. starting paycheck_split did not match the amount of budgets.
-                # could add a check for that and add 0 for ones that don't have them, particularly
-                # if budgets have just been modified
                 budgets = presets['budgets']
+
+                #make sure the length of the paycheck_split matches the length of the budgets
+                if len(budgets) != len(og_value):
+                    #add 0s to paycheck_split if budgets is longer
+                    if len(budgets) > len(og_value):
+                        for _ in range(len(budgets) - len(og_value)):
+                            og_value.append(0)
+                    #arbitrarily remove values off the end of paycheck_split if its longer
+                    else:
+                        for _ in range(len(og_value) - len(budgets)):
+                            og_value.pop()
                 
                 #show preexisting data
                 print("The current split for your budgets are as follows:")
@@ -952,12 +952,17 @@ def changePresets(filepath=presetsFilepath):
             #handle other lists
             else:
                 #can either be accounts or budgets, both are lists of strings
+
+                #make a copy of budgets list to manage paycheck_split properly
+                if variable == 'budgets':
+                    original_budgets = og_value[:]
+
                 print(f"These are your current {variable}:")
                 for val in og_value:
-                    print(val)
+                    print("\t",val)
                 
                 #options are add, remove, or modify
-                print("\nYou can add, remove, or modify accounts.")
+                print(f"\nYou can add, remove, or modify {variable}.")
                 #add
                 add = input(f"Would you like to add any {variable}? Y/N ").lower()
                 if add == 'y' or add == 'yes' or add == 'yee':
@@ -968,7 +973,7 @@ def changePresets(filepath=presetsFilepath):
                         new.append(n.strip())
                     
                     for name in new:
-                        #make sure it's a new name #DID NOT DEBUG CHECK THIS
+                        #make sure it's a new name
                         while name in og_value:
                             name = input(f"{name} is already in {variable}! Please enter a "\
                                          "different name, or enter 'skip' to move on: ").lower()
@@ -976,20 +981,20 @@ def changePresets(filepath=presetsFilepath):
                                 break
 
                         if name == 'skip':
-                            printLine()
-                            print(f"The following are your current {variable}:")
-                            for item in og_value:
-                                print(item)
                             continue
                         
                         #passes all checks
                         presets[variable].append(name)
                         og_value = presets[variable]#reset for remove/modify
+
+                        #maintain paycheck_split
+                        if variable == 'budgets':
+                            presets['paycheck_split'].append(0)
                         
                     printLine()
                     print(f"The following are your current {variable}:")
                     for item in og_value:
-                        print(item)
+                        print("\t",item)
                 
                 #remove
                 rem = input(f"\nWould you like to remove one of the above {variable}? Y/N ").lower()
@@ -1001,7 +1006,7 @@ def changePresets(filepath=presetsFilepath):
                         rem.append(r.strip())
                     
                     for name in rem:
-                        #make sure it's an existing name #DID NOT DEBUG CHECK THIS
+                        #make sure it's an existing name
                         while name not in og_value:
                             name = input(f"{name} is not in {variable}! Please enter an "\
                                          "existing name, or enter 'skip' to move on: ").lower()
@@ -1015,10 +1020,21 @@ def changePresets(filepath=presetsFilepath):
                         presets[variable].remove(name)
                         og_value = presets[variable]#reset for later iterations
                         
-                        printLine()
-                        for item in og_value:
-                            print(item)
-                
+                        #maintain paycheck_split
+                        if variable == 'budgets':
+                            #remove the corresponding paycheck split value, and check if it'll mess up total
+                            if name in original_budgets:
+                                deleted = presets['paycheck_split'].pop(original_budgets.index(name))
+                                if deleted != 0:
+                                    must_edit_paycheck_split = True
+                            else:
+                                #if it was added this cycle, the paycheck_split is 0 appended to end
+                                presets['paycheck_split'].pop()
+                    
+                    printLine()
+                    for item in og_value:
+                        print("\t",item)
+                    
                 #modify
                 mod = input(f"\nWould you like to modify one of the above {variable}? Y/N ").lower()
                 if mod == 'y' or mod == 'yes' or mod == 'yee':
@@ -1030,7 +1046,7 @@ def changePresets(filepath=presetsFilepath):
                     
                     for name in mod:
                         printLine()
-                        print(f"Working on modifying the {name} {variable}.")
+                        print(f"Working on modifying the {name} {variable[:-1]}.")
                         #make sure it's an existing name
                         while name not in og_value:
                             name = input(f"{name} is not in {variable}! Please enter an "\
@@ -1057,9 +1073,35 @@ def changePresets(filepath=presetsFilepath):
                         index = presets[variable].index(name)
                         presets[variable][index] = new_name
                         og_value = presets[variable]#reset for later iterations
+
+                        #paycheck_split doesn't need to be updated here - will maintain split from previous budget name
+                
+                #maintain paycheck_split
+                #lengths should be same b/c of maintaining throughout
+                if variable == 'budgets':
+                    #not necessary to add if it's already been added by the user
+                    if 'paycheck_split' not in to_change[i:]:
                         
-        print("writing to file")#debug
-        print("presets dict is",presets)#debug
+                        #check if paycheck_splits add to 1
+                        if abs(sum(presets['paycheck_split']) - 1) > .0001:
+                            print("Due to editing budgets, paycheck_split now needs to be updated.")
+                            must_edit_paycheck_split = True
+                        
+                        else:
+                            print("Since you edited budgets, your paycheck split is now the following:")
+                            for i, el in enumerate(presets['paycheck_split']):
+                                print(f"{og_value[i]}\t{el}")
+                            
+                            change = input("Would you like to change this split? Y/N ").lower()
+                            if change == 'y' or change == 'yes' or change == 'yee':
+                                must_edit_paycheck_split = True
+                            else:
+                                must_edit_paycheck_split = False
+                                
+                        if must_edit_paycheck_split:
+                            #run paycheck_split immediately after this
+                            to_change.insert(i+1, 'paycheck_split')
+
         #after modifying each variable in presets dict, write new information to file
         #(restart from scratch and use pandas to create csv)
         
