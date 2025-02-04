@@ -823,24 +823,23 @@ def changePresets(filepath=presetsFilepath):
     #ask which to change
     inp = input("Please enter the names of each of the presets, from the list above, "\
                 "that you would like to change, separated by commas: ")
-    to_change = (inp.replace(" ","")).split(",")#get rid of spaces and split by comma
+    to_change_input = (inp.replace(" ","")).split(",")#get rid of spaces and split by comma
     
-    for variable in to_change:
+    to_change = []
+    for variable in to_change_input:
         #check input
         while variable not in presets:
             variable = input(f"{variable} not found in presets. Please enter "\
                     "a valid preset name, or type 'skip' to move on: ").lower()
             if variable == 'skip':
                 break
+        to_change.append(variable)
 
     for i, variable in enumerate(to_change):
-        print("doing variable",variable)#debug
         if variable == 'skip':
             continue
 
         og_value = presets[variable]#get original value
-        print("og_value is",og_value)#debug
-        print("og_value type is",type(og_value))#debug
         
         printLine()
         print(f"Working on changing {variable}.")
@@ -850,8 +849,10 @@ def changePresets(filepath=presetsFilepath):
             #if value is a single item
             #includes everything except accounts, budgets, and paycheck_split
 
+            csv_settings = {"transactions_file", "balance_checks_file", "income_record_file"}
+
             #if it's a csv filename, print possible files in the local directory
-            if isinstance(og_value, str) and og_value[-4:] == ".csv":
+            if variable in csv_settings:
                 files = glob.glob("*.csv")
                 print("The available csv files in the current folder are:")
                 for file in files:
@@ -864,7 +865,7 @@ def changePresets(filepath=presetsFilepath):
             #change checkInput type depending on the variable
             #str
             if isinstance(og_value, str):
-                if og_value[-4:] == ".csv":
+                if variable in csv_settings:
                     inputType = 'csv'
                 elif variable == 'paycheck_account':
                     inputType = 'account'
@@ -876,14 +877,33 @@ def changePresets(filepath=presetsFilepath):
             else:
                 inputType = 'amount'
 
-            presets[variable] = checkInput(new, inputType)
+            new_value = checkInput(new, inputType)
 
-            #should check if the file is already being used for a previously set filepath.
-            #not one that user set to be changed during this run, though
+            #making sure it's not already set for another csv variable
+            if variable in csv_settings:
+                #create list of other filenames already set
+                set_filenames = []
+                for preset in csv_settings:
+                    #not this variable, and not going to be changed this run
+                    if preset not in to_change[i:]:
+                        set_filenames.append(presets[preset])
+                
+                #if already a set file, they need to put in a different file
+                while new_value in set_filenames:
+                    new_value = input("This file is already being used for another preset! "\
+                        "Please input a valid file not being used, or type 'cancel' to move on. ")
+                    if new_value == 'cancel':
+                        break
+                    new_value = checkInput(new_value, 'csv')
+
+            if new_value != 'cancel':
+                presets[variable] = new_value
                     
         #no exit option
 
         #should also check for duplicates when checking input
+
+        #add functionality to put "all" when asking for a list of things to edit
 
         else:#value is a list
             #paycheck_split gets special case
@@ -939,15 +959,12 @@ def changePresets(filepath=presetsFilepath):
                     
                     #check that it totals to 1
                     if abs(sum(new_values) - 1) > .0001:#account for float error - does this work?? I would try rounding maybe
-                        print("These values don't seem to sum to 1! Please re-enter.\n"\
-                              "(If they do and this seems to be an error, please let Dani know.)")#remove disclaimer lol
+                        print("These values don't seem to sum to 1! Please re-enter.")
                         adds = False
-                        #when this happens, it makes you re-enter the mistyped budgets. Fix that
                     else:
                         adds = True
 
                 presets['paycheck_split'] = new_values
-                print("new_values is",new_values)
                 
             #handle other lists
             else:
