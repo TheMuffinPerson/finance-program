@@ -493,11 +493,13 @@ def checkInput(inp,typ,all_bool=False):
     
     elif typ == "amount":
         while type(inp) == str:
-           try:
-               inp = float(inp)
-           except ValueError:
-               print("That is an invalid entry. Please enter a number.")
-               inp = input("Amount: ")
+            if inp == 'exit':
+                break
+            try:
+                inp = float(inp)
+            except ValueError:
+                print("That is an invalid entry. Please enter a number.")
+                inp = input("Amount: ")
                
     elif "filter" in typ:#filter or income_filter
         inp = inp.lower()
@@ -825,7 +827,10 @@ def changePresets(filepath=presetsFilepath):
             "paycheck due to rounding, the amount needed in order for it to add correctly "\
             "will be taken from or added to the budget you set here.",
         "monthly_rent": "The monthly rent is the amount you pay per month for rent.",
-        "monthly_internet": "The monthly internet is the amount you pay per month for internet."}
+        "monthly_internet": "The monthly internet is the amount you pay per month for internet.",
+        "budget_caps": "The budget caps is a list of the max amount of money you want to have "\
+            "in each budget. If an item in the list is 'null', it means the corresponding budget "\
+            "does not have a cap."}
 
     printLine()
     print("Type 'exit' in any field to cancel.")
@@ -873,8 +878,103 @@ def changePresets(filepath=presetsFilepath):
         printLine()
         print(f"Working on changing {variable}.")
         print(instructions[variable])#give a brief explanation of the variable
-        
-        if not isinstance(og_value, list):
+
+        #budget_caps needs special case because it can be a str or list
+        if variable == 'budget_caps':
+            budgets = presets['budgets']
+
+            if isinstance(og_value, str):
+                on = input("You currently have budget caps turned off. Would you like to turn this "\
+                      "setting on? Y/N ").strip().lower()
+                if on == 'exit':
+                    print("Exiting budget caps editing...")
+                    continue
+                elif on in {'yes','y','yee'}:
+                    #create a list to put the budgets through, and then run the second part of budget_caps handling
+                    og_value = ['null' for _ in range(len(budgets))]
+                    edit_list = True
+                else:#no change
+                    continue
+
+            else:
+                off = input("You currently have budget caps turned on. Would you like to turn this "\
+                      "setting off? Y/N ").strip().lower()
+                if off == 'exit':
+                    print("Exiting budget caps editing...")
+                    continue
+                elif off in {'yes','y','yee'}:
+                    presets['budget_caps'] = 'null'
+                    edit_list = False
+                else:
+                    edit_list = True
+
+            #runs only if there is a list & they want to edit it
+            if edit_list:
+                #make sure list is same length as budgets list
+                if len(budgets) != len(og_value):
+                    #add nulls to budget_caps if budgets is longer
+                    if len(budgets) > len(og_value):
+                        for _ in range(len(budgets) - len(og_value)):
+                            og_value.append('null')
+                    #arbitrarily remove values off the end of budget_caps if it's longer
+                    else:
+                        for _ in range(len(og_value) - len(budgets)):
+                            og_value.pop()
+
+                #show existing data
+                print("The current budget caps are as follows:")
+                for i, el in enumerate(og_value):
+                    print(f"{budgets[i]}\t{el}")
+
+                check = input("Would you like to change any of these caps? Y/N ").strip().lower()
+                if check not in {'y','yes','yee'}:
+                    continue#move on to next to_change variable
+                
+                inp = input("Which budgets would you like to change the cap for? this includes "\
+                            "adding, removing, and changing a cap. Please separate by commas, or "\
+                            "type 'all' to change all budget caps: ").strip().lower()
+                if inp == 'exit':
+                    print("Exiting paycheck split editing...")
+                    continue#move to next variable in to_change
+                elif inp == 'all':
+                    budgs = budgets[:]
+                else:
+                    #correct/check input
+                    budgs = []
+                    for budg in inp.split(","):
+                        budg = checkInput(budg.strip(), 'budget')
+                        if budg == 'exit':
+                            print("Removing this budget from editing...")
+                        if budg not in {'null', 'exit'}:
+                            budgs.append(budg)
+                
+                #build list of budget indices to change
+                budg_indices = []
+                for budg in budgs:
+                    budg_indices.append(budgets.index(budg))
+
+                #go through each and ask for new caps
+                new_caps = og_value[:]
+                for i, budg_index in enumerate(budg_indices):
+                    new = input(f"What cap would you like to set for {budgs[i]}? Type 'null' for no cap. ").strip().lower()
+                    if new == 'exit':
+                        new_caps = og_value[:]#reset to beginning
+                        print("Exiting budget caps editing...")
+                        break#still want to reset to str 'null' if all els are 'null'
+                    
+                    if new != 'null':
+                        new = checkInput(new, 'amount')
+
+                    new_caps[budg_index] = new
+
+                #add check at the end - if every value in the list is 'null', reset whole variable to 'null'
+                if new_caps == ['null' for _ in range(len(new_caps))]:
+                    presets['budget_caps'] = 'null'
+
+                else:
+                    presets['budget_caps'] = new_caps
+
+        elif not isinstance(og_value, list):
             #if value is a single item
             #includes everything except accounts, budgets, and paycheck_split
 
@@ -949,7 +1049,7 @@ def changePresets(filepath=presetsFilepath):
                     if len(budgets) > len(og_value):
                         for _ in range(len(budgets) - len(og_value)):
                             og_value.append(0)
-                    #arbitrarily remove values off the end of paycheck_split if its longer
+                    #arbitrarily remove values off the end of paycheck_split if it's longer
                     else:
                         for _ in range(len(og_value) - len(budgets)):
                             og_value.pop()
@@ -1088,9 +1188,11 @@ def changePresets(filepath=presetsFilepath):
                         presets[variable] += to_add
                         og_value = presets[variable]#reset for remove/modify
 
-                        #maintain paycheck_split
+                        #maintain paycheck_split/budget_caps
                         if variable == 'budgets':
                             presets['paycheck_split'] += [0] * len(to_add)
+                            if presets['budget_caps'] != 'null':
+                                presets['budget_caps'] += ['null'] * len(to_add)
 
                     printLine()
                     print(f"The following are your current {variable}:")
@@ -1121,13 +1223,12 @@ def changePresets(filepath=presetsFilepath):
                             #set all necessary variables to empty
                             presets[variable] = []
                             og_value = []
-                            if variable == 'budgets':#maintain paycheck_split
+                            if variable == 'budgets':#maintain paycheck_split/budget_caps
                                 presets['paycheck_split'] = []
+                                presets['budget_caps'] = 'null'
                             rest = False
 
                     if rest:
-                        # original_paycheck_split = presets['paycheck_split'][:]
-
                         rem = []
                         for r in rem_raw.split(","):
                             rem.append(r.strip())
@@ -1159,16 +1260,22 @@ def changePresets(filepath=presetsFilepath):
                             for name in to_rem:
                                 presets[variable].remove(name)
                             
-                            #maintain paycheck_split
+                            #maintain paycheck_split & budget_caps
                             if variable == 'budgets':
                                 #remove the corresponding paycheck split value, and check if it'll mess up total
                                 if name in original_budgets:
                                     deleted = presets['paycheck_split'].pop(original_budgets.index(name))
                                     if deleted != 0:
                                         must_edit_paycheck_split = True
+
+                                    if presets['budget_caps'] != 'null':
+                                        presets['budget_caps'].pop(original_budgets.index(name))
+
                                 else:
-                                    #if it was added this cycle, the paycheck_split is 0 appended to end
+                                    #if it was added this cycle, the split/cap is 0/null appended to end
                                     presets['paycheck_split'].pop()
+                                    if presets['budget_caps'] != 'null':
+                                        presets['budget_caps'].pop()
                         
                             og_value = presets[variable]#reset for later iterations
                     
@@ -1268,9 +1375,9 @@ def changePresets(filepath=presetsFilepath):
                             presets[variable][index] = mod_dict[name]
                         
                         og_value = presets[variable]#reset for later iterations
-                        #paycheck_split doesn't need to be updated here - will maintain split from previous budget name
+                        #paycheck_split/budget_caps don't need to be updated here - will maintain from previous budget name
                 
-                #maintain paycheck_split
+                #maintain paycheck_split/budget_caps
                 #lengths should be same b/c of maintaining throughout
                 if variable == 'budgets':
                     #not necessary to add if it's already been added by the user
@@ -1286,7 +1393,7 @@ def changePresets(filepath=presetsFilepath):
                             for i, el in enumerate(presets['paycheck_split']):
                                 print(f"{og_value[i]}\t{el}")
                             
-                            change = input("Would you like to change this split? Y/N ").lower()
+                            change = input("Would you like to change this split? Y/N ").strip().lower()
                             if change == 'y' or change == 'yes' or change == 'yee':
                                 must_edit_paycheck_split = True
                             else:
@@ -1294,7 +1401,19 @@ def changePresets(filepath=presetsFilepath):
                                 
                         if must_edit_paycheck_split:
                             #run paycheck_split immediately after this
-                            to_change.insert(i, 'paycheck_split')
+                            to_change.insert(i+1, 'paycheck_split')
+
+                    if presets['budget_caps'] != 'null':
+                        #check if added later
+                        if 'budget_caps' not in to_change[i:]:
+                            print("Since you edited budgets, your budget caps are now as follows:")
+                            for i, el in enumerate(og_value):
+                                print(f"{el}\t{presets['budget_caps'][i]}")
+
+                            change = input("Would you like to change any of these caps? Y/N ").strip().lower()
+                            if change in {'yes','yee','y'}:
+                                #run budget_caps after this
+                                to_change.insert(i+1, 'budget_caps')
             
             #for lists, cannot have no entries, must have at least 1
             if presets[variable] == []:
