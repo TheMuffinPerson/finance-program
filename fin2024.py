@@ -580,6 +580,11 @@ def checkInput(inp,typ,all_bool=False):
         count = 0
         while fail:
             fail = False
+
+            if inp.strip().lower() == 'today':
+                inp = today
+                break
+
             try:
                 #if too short, assume lower month
                 if len(inp) == 4:
