@@ -362,7 +362,52 @@ def add(totalList):
         total += item.getAmount()
     total = round(total, 2)
     return total
-        
+
+def findBudgetCap(budget):
+    """
+    finds the set cap of the given budget
+
+    Parameters
+    ----------
+    budget : str
+        a valid budget from the list of budgets in presets
+
+    Returns
+    -------
+    float or str, the value of the cap as a float if it has one, 'null' if it does not
+    """
+    if isinstance(presets['budget_caps'], str):
+        return 'null'#if budget caps are not turned on
+    cap = presets['budget_caps'][presets['budgets'].index(budget)]
+
+    return cap
+
+def overcapAmt(budget, amount_to_add, cap=False):
+    """
+    gives the amount a budget will be overcapped by if the given amount is added.
+
+    Parameters
+    ----------
+    budget : str
+        a valid budget from the list of budgets in presets
+    amount_to_add : float
+        the amount to be added to the budget
+    cap : bool, float
+        the cap of the budget being added to. Default is False, if a cap is 
+        not given, the function will find it based on the global presets
+    
+    Returns
+    -------
+    float or None, None if the budget has no cap, otherwise float represending the overcap amount
+        Note that if the budget will not overcap, this function will return a negative number
+    """
+    if not(cap) and isinstance(cap, bool):
+        cap = findBudgetCap(budget)
+    if cap == 'null':
+        return
+    
+    return (add(totalBudget(budget,filepathToTransactionList())) + amount_to_add) - cap
+
 def overcapCheck(budget, amount_to_add, cap=False):
     """
     checks if a budget will become overcapped if the given amount is added.
@@ -379,19 +424,132 @@ def overcapCheck(budget, amount_to_add, cap=False):
     
     Returns
     -------
-    bool, True if it will overcap, False if not. Note that if the amount reaches
-        the cap exactly, this function will return False
+    bool, True if it will overcap, False if not.
+        Note that if the amount reaches the cap exactly, this function will return False
 
     """
-    #first find cap
-    if not(cap):
-        if isinstance(presets['budget_caps'], str):
-            return False
-        cap = presets['budget_caps'][presets['budgets'].index(budget)]
-    if cap == 'null':
-        return False
+    total = overcapAmt(budget, amount_to_add, cap)
 
-    return add(totalBudget(budget,filepathToTransactionList())) + amount_to_add > cap
+    if total == None:#no cap
+        return False
+    elif total > 0:#over cap
+        return True
+    else:
+        return False#0 or negative -- under cap
+
+def overcapProcedure(budget, amount_to_add, cap=False):
+    """
+    handles the event where user wants to add an amount that would cause the 
+    corresponding budget to go over its set cap
+
+    Parameters
+    ----------
+    budget : str
+        a valid budget from the list of budgets in presets
+    amount_to_add : float
+        the amount to be added to the budget
+    cap : bool, float
+        the cap of the budget being added to. Default is False, if a cap is 
+        not given, the function will find it based on the global presets
+    
+    Returns
+    -------
+    None, list
+        None if user cancels the transaction
+        list - nested list of transactions in the format [budget, amount] to be added to file
+    """
+    #first check if the budget is already capped before the amount is added
+    if overcapAmt(budget, 0, cap) >= 0:
+    # if overcapCheck(budget, 0, cap):
+        already_capped = True
+        what_do = input(f"The {budget} budget is already capped! You can enter 1 to override "\
+                        "the cap and add this amount anyway, 2 to add the amount to "\
+                        "a different budget, or 3 to cancel this transaction. 1/2/3 ").strip().lower()
+    else:
+        already_capped = False
+        what_do = input(f"Adding this amount to the {budget} budget will result in it going over "\
+                        "its set cap. You can enter 1 to override the cap and add this amount "\
+                        "anyway, 2 to add money up to this budget's set cap, or 3 to cancel "\
+                        "this transaction. 1/2/3 ").strip().lower()
+
+    while what_do not in {"1","2","3","exit","override"}:
+        what_do = input("This is not a valid option. Please choose 1, 2, or 3 from the "\
+                        "options listed above. 1/2/3 ").strip().lower()
+        
+    if what_do in {"3", "exit"}:
+        print("You have selected to cancel this transaction. Now exiting.")
+        return
+    
+    elif what_do in {"1","override"}:
+        print("You have selected to override the cap.")
+        return [[budget, amount_to_add]]
+
+    elif what_do in {"2"}:
+        printLine()
+        cap = findBudgetCap(budget)
+
+        #need different handling for if all of the new amount is being moved,
+        # vs just a portion
+        transactions = list()
+
+        if already_capped:
+            print("You have selected to change the destination budget.")
+            overcap = amount_to_add
+            next_budget = input("Which budget would you like to change to? ").strip().lower()
+
+        else:
+            print("You have selected to add an amount up to the budget cap.")
+            overcap = round(overcapAmt(budget, amount_to_add, cap),2)
+            undercap = amount_to_add - overcap
+            print(f"${undercap} of the amount will be added to {budget}.")
+            transactions.append([budget, undercap])
+            print(f"The {budget} budget will overcap your set cap of {cap} by ${overcap}.")
+
+            options = input("Would you like to (1) remove this amount from the transaction, (2) add it "\
+                            "to the set overflow budget, or (3) add it to another budget? 1/2/3 ").strip().lower()
+            
+            while options not in {"1","2","3","remove","overflow","other","another","exit"}:
+                options = input("This is not a valid option. Please choose 1, 2, or 3 from the "\
+                                "options listed above. 1/2/3 ").strip().lower()
+
+            if options == "exit":
+                return
+            elif options in {"1","remove"}:
+                return transactions
+            elif options in {"2","overflow"}:
+                transactions.append([presets['overflow_budget'], overcap])
+                return transactions
+            elif options in {"3","other","another"}:
+                next_budget = input("Which budget would you like this extra money to go to? ").strip().lower()
+        
+        next_budget = checkInput(next_budget,"budget")
+        if next_budget is None:
+            return
+        
+        if overcapCheck(next_budget,overcap):
+            printLine()
+            #ask again if they'd like to add to overflow budget
+            print(f"Adding this amount to the {next_budget} budget will put that budget over the set cap.")
+            overflow = input("Would you like to add the amount to the set overflow budget instead? Y/N ").strip().lower()
+            if overflow == 'exit':
+                return
+            elif overflow in {'y','yes','yee'}:
+                transactions.append([presets["overflow_budget"], overcap])
+            else:
+                #recursive problem with capped budget
+                printLine()
+                handling = overcapProcedure(next_budget,overcap)
+                if handling is None:
+                    return
+                else:
+                    transactions += handling
+        else:
+            transactions.append([next_budget,overcap])
+
+        if overcapAmt(next_budget,overcap) == 0:
+            print(f"The {next_budget} budget is now capped at {findBudgetCap(next_budget)}.")
+
+        return transactions
 
 
 def checkInput(inp,typ,all_bool=False):
@@ -1007,15 +1165,15 @@ def changePresets(filepath=presetsFilepath):
                             elif uncap in {'y','yes','yee'}:
                                 to_budget = input("Which budget would you like to move it to? ").strip().lower()
                                 to_budget = checkInput(to_budget, 'budget')
-                                if to_budget in {'exit', 'null'}:
+                                if to_budget == 'exit':
                                     new_caps = og_value[:]
                                     print("Exiting budget caps editing...")
                                     break
 
                                 overcap_amt = current_amt - new
 
-                                writeTransfer([today,"budget cap transfer",budgs[i],-1*overcap_amt],
-                                              [today,"budget cap transfer",to_budget,overcap_amt])
+                                writeTransfer([today,"budget cap transfer",'null',budgs[i],-1*overcap_amt],
+                                              [today,"budget cap transfer",'null',to_budget,overcap_amt])
 
 
                     new_caps[budg_index] = new
@@ -1199,13 +1357,13 @@ def changePresets(filepath=presetsFilepath):
                 #options are add, remove, or modify
                 print(f"\nYou can add, remove, or modify {variable}.")
                 #add
-                add = input(f"Would you like to add any {variable}? Y/N ").lower().strip()
+                add_var = input(f"Would you like to add any {variable}? Y/N ").lower().strip()
 
-                if add == 'exit':
+                if add_var == 'exit':
                     print(f"Exiting {variable} editing...")
                     continue#go to next entry in to_change
 
-                if add in {'y','yes','yee'}:
+                if add_var in {'y','yes','yee'}:
                     new_raw = input(f"Please enter the names of the new {variable} you "\
                                 "would like to add, separated by commas: ").strip().lower()
 
@@ -1589,6 +1747,23 @@ def transfer(filename=presets['transactions_file']):
     if amount is None:
         return
 
+    #check for overcapping budgets
+    if isinstance(presets["budget_caps"], list):
+        if budget_to != 'null':
+            if overcapCheck(budget_to,amount):
+                #then the transfer will overcap its destination budget
+                split_deposits = overcapProcedure(budget_to,amount)
+                if split_deposits is None:
+                    return
+                for deposit in split_deposits:
+                    writeTransaction([date,name,account_to]+deposit)
+                #also add withdrawal part
+                writeTransaction([date,name,account_from,budget_from,-1*amount])
+                return
+
+            elif overcapAmt(budget_to,amount) == 0:
+                print(f"The {budget_to} budget is now overcapped at {findBudgetCap(budget_to)}.")
+
     writeTransfer([date,name,account_from,budget_from,-1*amount], \
                   [date,name,account_to,budget_to,amount])
     
@@ -1793,12 +1968,11 @@ def paycheck(amount, filename=presets['transactions_file'], paycheckFile=presets
 
 def getTransaction():
     """
-    ask user for transaction information (no intro print statement)
+    ask user for transaction information (no intro print statement) and writes it to the file
 
     Returns
     -------
-    a list of information in the format [date, name, account, budget, amount], 
-    or None if the user cancelled
+    None
     """
     print("Enter 'exit' at any time to cancel this transaction.")
     
@@ -1826,8 +2000,26 @@ def getTransaction():
     budget = checkInput(budget,"budget")
     if budget is None:
         return
+    
+    #check if this transaction will cap the destination budget
+    if amount > 0:
+        if isinstance(presets['budget_caps'], list):
+            if overcapCheck(budget,amount):
+                transactions = overcapProcedure(budget, amount)
+                #returns None if the user cancelled input, or
+                # list of [budget, amount] transactions to handle overcapping
+                if transactions is None:
+                    return
+                
+                for transaction in transactions:
+                    #write each returned transaction to the file
+                    writeTransaction([date, name, account] + transaction)
+                return
+                    
+            elif overcapAmt(budget, amount) == 0:
+                print(f"The {budget} budget is now capped at {findBudgetCap(budget)}.")
 
-    return [date, name, account, budget, amount]
+    writeTransaction([date, name, account, budget, amount])
 
 
 def weekly(filename=presets['transactions_file']):
@@ -1847,7 +2039,7 @@ def weekly(filename=presets['transactions_file']):
     """
     #add paycheck
     paycheckAsk = input("First we'll add the paycheck. Did you get a paycheck that you'd like to add? Y/N  ")
-    if paycheckAsk.lower() == "y" or paycheckAsk.lower() == "yes" or paycheckAsk.lower() == "yee":
+    if paycheckAsk.lower() in {'yes','y','yee'}:
         print("Please enter the following information about the paycheck.")
         amount = input("Amount: ")
         amount = checkInput(amount,"amount")
@@ -1898,9 +2090,7 @@ def weekly(filename=presets['transactions_file']):
         done = False
     while not done:
         printLine()
-        data = getTransaction()
-        if data is not None:
-            writeTransaction(data)
+        getTransaction()
         
         ask = input("Done? Y/N  ")
         if ask.lower() == "y" or ask.lower() == "yes" or ask.lower() == "yee":
@@ -2001,7 +2191,7 @@ def __main__():
             changePresets()
             
         elif entry == "budget":
-            budget = input("Please enter which budget you would like to check (type 'all' too see all budgets): ")
+            budget = input("Please enter which budget you would like to check (type 'all' to see all budgets): ")
             budget = checkInput(budget,"budget",True)
             if budget is not None:
                 #turn into a list if it isn't
@@ -2083,9 +2273,7 @@ def __main__():
                 done = False
             while not done:
                 printLine()
-                data = getTransaction()
-                if data is not None:
-                    writeTransaction(data)
+                getTransaction()
                 
                 ask = input("Done? Y/N  ")
                 if ask.lower() == "y" or ask.lower() == "yes" or ask.lower() == "yee":
