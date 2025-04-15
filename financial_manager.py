@@ -12,7 +12,7 @@ presetsFilepath = 'presets.csv'
 
 import glob
 import pandas
-from datetime import date
+from datetime import date, timedelta
 
 #need this func before global variables
 def loadPresets(filename=presetsFilepath):
@@ -2288,10 +2288,12 @@ def __main__():
         elif entry == "history":
             filterList = filepathToTransactionList()
             
+            print("History will automatically only display the last 30 days unless another date is specified.")
             filterType = input("How would you like to filter the list?  ")
             filterType = filterType.lower()
             filterType = checkInput(filterType,"filter")
             
+            date_filter = False
             while filterType != "none":
                     
                 if filterType == "budget":
@@ -2307,13 +2309,15 @@ def __main__():
                     filterList = totalAccount(account, filterList)
                     
                 elif filterType == "date":
-                    start_date = input("Please enter the start date of the range (MM-DD): ")
-                    start_date = checkInput(start_date,"date")
-                    
-                    end_date = input("Please enter the end date of the range (MM-DD): ")
-                    end_date = checkInput(end_date,"date")
-                    
-                    filterList = totalDate(start_date, end_date, filterList)
+                    date_filter = True
+                    start_date = input("Please enter the start date of the range (MM-DD), or type 'all' to have no date filter: ")
+                    if start_date.strip().lower() != 'all':
+                        start_date = checkInput(start_date,"date")
+                        
+                        end_date = input("Please enter the end date of the range (MM-DD): ")
+                        end_date = checkInput(end_date,"date")
+                        
+                        filterList = totalDate(start_date, end_date, filterList)
                 
                 elif filterType == "name":
                     query = input("Please enter what text you would like to search for: ").lower()
@@ -2322,7 +2326,10 @@ def __main__():
                 filterType = input("How would you like to further filter the list?  ")
                 filterType = filterType.lower()
                 filterType = checkInput(filterType,"filter")
-                    
+            
+            if not date_filter:
+                #only display the previous 30 days
+                filterList = totalDate(str(date.today() - timedelta(30))[5:], today, filterList)
             printList(filterList)
 
         elif entry == "balance":
