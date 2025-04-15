@@ -62,6 +62,12 @@ def loadPresets(filename=presetsFilepath):
             val = float(val)
         
         data[var] = val
+
+    #for budget_caps, if active, -1 values should be changed to 'null'
+    if isinstance(data['budget_caps'], list):
+        for i, el in enumerate(data['budget_caps']):
+            if el == -1:
+                data['budget_caps'][i] = 'null'
     
     return data
 
@@ -69,16 +75,6 @@ def loadPresets(filename=presetsFilepath):
 global today, presets
 today = str(date.today())[5:]
 presets = loadPresets(presetsFilepath)
-
-"""
-suggestions:
-    -let it run from the file explorer
-    -fix sorting--still not stable (just change to radix/tuple sort)
-    -add "company" option? destination company
-    -make date possible w/o 0 by finding index of hyphen
-    -"add from future spending?" option (personal)
-    -personal - add Crunchyroll sub to weekly checks
-"""
 
 #each row of a csv is returned as a list of string elements
 class transaction:
@@ -366,7 +362,195 @@ def add(totalList):
         total += item.getAmount()
     total = round(total, 2)
     return total
+
+def findBudgetCap(budget):
+    """
+    finds the set cap of the given budget
+
+    Parameters
+    ----------
+    budget : str
+        a valid budget from the list of budgets in presets
+
+    Returns
+    -------
+    float or str, the value of the cap as a float if it has one, 'null' if it does not
+    """
+    if isinstance(presets['budget_caps'], str):
+        return 'null'#if budget caps are not turned on
+    cap = presets['budget_caps'][presets['budgets'].index(budget)]
+
+    return cap
+
+def overcapAmt(budget, amount_to_add, cap=False):
+    """
+    gives the amount a budget will be overcapped by if the given amount is added.
+
+    Parameters
+    ----------
+    budget : str
+        a valid budget from the list of budgets in presets
+    amount_to_add : float
+        the amount to be added to the budget
+    cap : bool, float
+        the cap of the budget being added to. Default is False, if a cap is 
+        not given, the function will find it based on the global presets
+    
+    Returns
+    -------
+    float or None, None if the budget has no cap, otherwise float represending the overcap amount
+        Note that if the budget will not overcap, this function will return a negative number
+    """
+    if not(cap) and isinstance(cap, bool):
+        cap = findBudgetCap(budget)
+    if cap == 'null':
+        return
+    
+    return (add(totalBudget(budget,filepathToTransactionList())) + amount_to_add) - cap
+
+def overcapCheck(budget, amount_to_add, cap=False):
+    """
+    checks if a budget will become overcapped if the given amount is added.
+
+    Parameters
+    ----------
+    budget : str
+        a valid budget from the list of budgets in presets
+    amount_to_add : float
+        the amount to be added to the budget
+    cap : bool, float
+        the cap of the budget being added to. Default is False, if a cap is 
+        not given, the function will find it based on the global presets
+    
+    Returns
+    -------
+    bool, True if it will overcap, False if not.
+        Note that if the amount reaches the cap exactly, this function will return False
+
+    """
+    total = overcapAmt(budget, amount_to_add, cap)
+
+    if total == None:#no cap
+        return False
+    elif total > 0:#over cap
+        return True
+    else:
+        return False#0 or negative -- under cap
+
+def overcapProcedure(budget, amount_to_add, cap=False):
+    """
+    handles the event where user wants to add an amount that would cause the 
+    corresponding budget to go over its set cap
+
+    Parameters
+    ----------
+    budget : str
+        a valid budget from the list of budgets in presets
+    amount_to_add : float
+        the amount to be added to the budget
+    cap : bool, float
+        the cap of the budget being added to. Default is False, if a cap is 
+        not given, the function will find it based on the global presets
+    
+    Returns
+    -------
+    None, list
+        None if user cancels the transaction
+        list - nested list of transactions in the format [budget, amount] to be added to file
+    """
+    #first check if the budget is already capped before the amount is added
+    if overcapAmt(budget, 0, cap) >= 0:
+    # if overcapCheck(budget, 0, cap):
+        already_capped = True
+        what_do = input(f"The {budget} budget is already capped! You can enter 1 to override "\
+                        "the cap and add this amount anyway, 2 to add the amount to "\
+                        "a different budget, or 3 to cancel this transaction. 1/2/3 ").strip().lower()
+    else:
+        already_capped = False
+        what_do = input(f"Adding this amount to the {budget} budget will result in it going over "\
+                        "its set cap. You can enter 1 to override the cap and add this amount "\
+                        "anyway, 2 to add money up to this budget's set cap, or 3 to cancel "\
+                        "this transaction. 1/2/3 ").strip().lower()
+
+    while what_do not in {"1","2","3","exit","override"}:
+        what_do = input("This is not a valid option. Please choose 1, 2, or 3 from the "\
+                        "options listed above. 1/2/3 ").strip().lower()
         
+    if what_do in {"3", "exit"}:
+        print("You have selected to cancel this transaction. Now exiting.")
+        return
+    
+    elif what_do in {"1","override"}:
+        print("You have selected to override the cap.")
+        return [[budget, amount_to_add]]
+
+    elif what_do in {"2"}:
+        printLine()
+        cap = findBudgetCap(budget)
+
+        #need different handling for if all of the new amount is being moved,
+        # vs just a portion
+        transactions = list()
+
+        if already_capped:
+            print("You have selected to change the destination budget.")
+            overcap = amount_to_add
+            next_budget = input("Which budget would you like to change to? ").strip().lower()
+
+        else:
+            print("You have selected to add an amount up to the budget cap.")
+            overcap = round(overcapAmt(budget, amount_to_add, cap),2)
+            undercap = amount_to_add - overcap
+            print(f"${undercap} of the amount will be added to {budget}.")
+            transactions.append([budget, undercap])
+            print(f"The {budget} budget will overcap your set cap of {cap} by ${overcap}.")
+
+            options = input("Would you like to (1) remove this amount from the transaction, (2) add it "\
+                            "to the set overflow budget, or (3) add it to another budget? 1/2/3 ").strip().lower()
+            
+            while options not in {"1","2","3","remove","overflow","other","another","exit"}:
+                options = input("This is not a valid option. Please choose 1, 2, or 3 from the "\
+                                "options listed above. 1/2/3 ").strip().lower()
+
+            if options == "exit":
+                return
+            elif options in {"1","remove"}:
+                return transactions
+            elif options in {"2","overflow"}:
+                transactions.append([presets['overflow_budget'], overcap])
+                return transactions
+            elif options in {"3","other","another"}:
+                next_budget = input("Which budget would you like this extra money to go to? ").strip().lower()
+        
+        next_budget = checkInput(next_budget,"budget")
+        if next_budget is None:
+            return
+        
+        if overcapCheck(next_budget,overcap):
+            printLine()
+            #ask again if they'd like to add to overflow budget
+            print(f"Adding this amount to the {next_budget} budget will put that budget over the set cap.")
+            overflow = input("Would you like to add the amount to the set overflow budget instead? Y/N ").strip().lower()
+            if overflow == 'exit':
+                return
+            elif overflow in {'y','yes','yee'}:
+                transactions.append([presets["overflow_budget"], overcap])
+            else:
+                #recursive problem with capped budget
+                printLine()
+                handling = overcapProcedure(next_budget,overcap)
+                if handling is None:
+                    return
+                else:
+                    transactions += handling
+        else:
+            transactions.append([next_budget,overcap])
+
+        if overcapAmt(next_budget,overcap) == 0:
+            print(f"The {next_budget} budget is now capped at {findBudgetCap(next_budget)}.")
+
+        return transactions
+
 
 def checkInput(inp,typ,all_bool=False):
     """
@@ -396,6 +580,11 @@ def checkInput(inp,typ,all_bool=False):
         count = 0
         while fail:
             fail = False
+
+            if inp.strip().lower() == 'today':
+                inp = today
+                break
+
             try:
                 #if too short, assume lower month
                 if len(inp) == 4:
@@ -493,11 +682,13 @@ def checkInput(inp,typ,all_bool=False):
     
     elif typ == "amount":
         while type(inp) == str:
-           try:
-               inp = float(inp)
-           except ValueError:
-               print("That is an invalid entry. Please enter a number.")
-               inp = input("Amount: ")
+            if inp == 'exit':
+                break
+            try:
+                inp = float(inp)
+            except ValueError:
+                print("That is an invalid entry. Please enter a number.")
+                inp = input("Amount: ")
                
     elif "filter" in typ:#filter or income_filter
         inp = inp.lower()
@@ -583,6 +774,80 @@ def init():
     printLine()
     print("Now are the budgets.")
     budg_amts = askEach(presets['budgets'])
+
+    #check for budgets that are over the cap
+    if isinstance(presets["budget_caps"],list):
+        for budget_i, budget in enumerate(presets['budgets']):
+            cap = findBudgetCap(budget)
+            if cap != 'null':
+                amount = budg_amts[budget_i]
+                if cap < amount:
+                    printLine()
+                    print(f"The {budget} budget has a cap of {cap}, and your given "\
+                          f"amount of {amount} exceeds that.")
+                    what_do = input(f"What would you like to do? You can enter 1 to "\
+                                    "ignore the set budget cap and allow the cap to "\
+                                    "be exceeded, enter 2 to only add an amount up to "\
+                                    "the cap and add the rest to a different budget, "\
+                                    "or enter 3 to cancel doing init entirely. 1/2/3 ").strip().lower()
+                    while what_do not in {"1","2","3","ignore","exit","cancel"}:
+                        what_do = input("This is not a valid options. Please choose 1, "\
+                                        "2, or 3 from the options listed above. 1/2/3 ").strip().lower()
+                    
+                    if what_do in {"3","exit","cancel"}:
+                        print("Okay, exiting init...")
+                        return
+                    
+                    elif what_do in {"1","ignore"}:
+                        print("This budget's cap will be ignored.")
+                        continue#next budget in for loop
+
+                    elif what_do in {"2"}:
+                        print(f"Okay, {cap} will be added to {budget}.")
+                        budg_amts[budget_i] = cap
+
+                        overcap_amt = amount - cap
+                        next_budget = input("Which budget would you like the remaining "\
+                                            f"amount of {overcap_amt} to be added to? ").strip().lower()
+                        next_budget = checkInput(next_budget,"budget")
+
+                        handled = False
+                        while not handled:
+                            next_budget_i = presets['budgets'].index(next_budget)
+
+                            #if budget has already been checked by this loop, must check now
+                            if next_budget in presets['budgets'][:budget_i]:
+                                next_budget_amt = budg_amts[next_budget_i]
+                                next_budget_cap = findBudgetCap(next_budget)
+
+                                if next_budget_amt + overcap_amt > next_budget_cap:
+                                    if next_budget_amt >= next_budget_cap:#already capped
+                                        print("This budget is already capped!")
+                                    else:
+                                        print(f"This will overcap the {next_budget} budget!")
+
+                                    add_anyway = input("Would you like to add anyway? Y/N ").strip().lower()
+                                    if add_anyway in {'y','yes','yee'}:
+                                        budg_amts[next_budget_i] += overcap_amt
+                                        handled = True
+
+                                    elif add_anyway == 'exit':
+                                        print("Exiting init...")
+                                        return
+                                    
+                                    else:
+                                        next_budget = input("Please choose another budget. ").strip().lower()
+                                        next_budget = checkInput(next_budget,"budget")
+                                        #then it'll rerun the while loop with the new next_budget
+
+                                else:#does not overcap next budget
+                                    budg_amts[next_budget_i] += overcap_amt
+                                    handled = True
+
+                            #if budget is yet to be checked by this loop, just add it
+                            else:
+                                budg_amts[next_budget_i] += overcap_amt
+                                handled = True
     
     #make sure total for accounts == total for budgets
     sum_acct = round(sum(acct_amts), 2)
@@ -825,7 +1090,13 @@ def changePresets(filepath=presetsFilepath):
             "paycheck due to rounding, the amount needed in order for it to add correctly "\
             "will be taken from or added to the budget you set here.",
         "monthly_rent": "The monthly rent is the amount you pay per month for rent.",
-        "monthly_internet": "The monthly internet is the amount you pay per month for internet."}
+        "monthly_internet": "The monthly internet is the amount you pay per month for internet.",
+        "budget_caps": "The budget caps is a list of the max amount of money you want to have "\
+            "in each budget. If an item in the list is 'null', it means the corresponding budget "\
+            "does not have a cap.",
+        "overflow_budget": "The overflow budget is the budget that income from things like paychecks "\
+            "will go into if all the budgets it's set to go into are capped."
+            }
 
     printLine()
     print("Type 'exit' in any field to cancel.")
@@ -873,8 +1144,132 @@ def changePresets(filepath=presetsFilepath):
         printLine()
         print(f"Working on changing {variable}.")
         print(instructions[variable])#give a brief explanation of the variable
-        
-        if not isinstance(og_value, list):
+
+        #budget_caps needs special case because it can be a str or list
+        if variable == 'budget_caps':
+            budgets = presets['budgets']
+
+            if isinstance(og_value, str):
+                on = input("You currently have budget caps turned off. Would you like to turn this "\
+                      "setting on? Y/N ").strip().lower()
+                if on == 'exit':
+                    print("Exiting budget caps editing...")
+                    continue
+                elif on in {'yes','y','yee'}:
+                    #create a list to put the budgets through, and then run the second part of budget_caps handling
+                    og_value = ['null' for _ in range(len(budgets))]
+                    edit_list = True
+                else:#no change
+                    continue
+
+            else:
+                off = input("You currently have budget caps turned on. Would you like to turn this "\
+                      "setting off? Y/N ").strip().lower()
+                if off == 'exit':
+                    print("Exiting budget caps editing...")
+                    continue
+                elif off in {'yes','y','yee'}:
+                    presets['budget_caps'] = 'null'
+                    edit_list = False
+                else:
+                    edit_list = True
+
+            #runs only if there is a list & they want to edit it
+            if edit_list:
+                #make sure list is same length as budgets list
+                if len(budgets) != len(og_value):
+                    #add nulls to budget_caps if budgets is longer
+                    if len(budgets) > len(og_value):
+                        for _ in range(len(budgets) - len(og_value)):
+                            og_value.append('null')
+                    #arbitrarily remove values off the end of budget_caps if it's longer
+                    else:
+                        for _ in range(len(og_value) - len(budgets)):
+                            og_value.pop()
+
+                #show existing data
+                print("The current budget caps are as follows:")
+                for i, el in enumerate(og_value):
+                    print(f"{budgets[i]}\t{el}")
+
+                check = input("Would you like to change any of these caps? Y/N ").strip().lower()
+                if check not in {'y','yes','yee'}:
+                    continue#move on to next to_change variable
+                
+                inp = input("Which budgets would you like to change the cap for? this includes "\
+                            "adding, removing, and changing a cap. Please separate by commas, or "\
+                            "type 'all' to change all budget caps: ").strip().lower()
+                if inp == 'exit':
+                    print("Exiting paycheck split editing...")
+                    continue#move to next variable in to_change
+                elif inp == 'all':
+                    budgs = budgets[:]
+                else:
+                    #correct/check input
+                    budgs = []
+                    for budg in inp.split(","):
+                        budg = checkInput(budg.strip(), 'budget')
+                        if budg == 'exit':
+                            print("Removing this budget from editing...")
+                        if budg not in {'null', 'exit'}:
+                            budgs.append(budg)
+                
+                #build list of budget indices to change
+                budg_indices = []
+                for budg in budgs:
+                    budg_indices.append(budgets.index(budg))
+
+                #go through each and ask for new caps
+                new_caps = og_value[:]
+                for i, budg_index in enumerate(budg_indices):
+                    new = input(f"What cap would you like to set for {budgs[i]}? Type 'null' for no cap. ").strip().lower()
+                    if new == 'exit':
+                        new_caps = og_value[:]#reset to beginning
+                        print("Exiting budget caps editing...")
+                        break#still want to reset to str 'null' if all els are 'null'
+                    
+                    if new != 'null':
+                        new = checkInput(new, 'amount')
+                        #check if the cap is lower than the current amount
+                        current_amt = add(totalBudget(budgs[i],filepathToTransactionList()))
+                        if new < current_amt:
+                            uncap = input(f"The cap you set is lower than the current total in {budgs[i]}! Type "\
+                                  "'yes' to transfer the excess balance to another budget, or 'no' to "\
+                                  "manually keep it higher than the budget. Note that moving this "\
+                                  "balance may overcap the destination budget. Y/N ").strip().lower()
+                            if uncap == 'exit':
+                                new_caps = og_value[:]
+                                print("Exiting budget caps editing...")
+                                break
+                            elif uncap in {'y','yes','yee'}:
+                                to_budget = input("Which budget would you like to move it to? ").strip().lower()
+                                to_budget = checkInput(to_budget, 'budget')
+                                if to_budget == 'exit':
+                                    new_caps = og_value[:]
+                                    print("Exiting budget caps editing...")
+                                    break
+
+                                overcap_amt = current_amt - new
+
+                                writeTransfer([today,"budget cap transfer",'null',budgs[i],-1*overcap_amt],
+                                              [today,"budget cap transfer",'null',to_budget,overcap_amt])
+
+
+                    new_caps[budg_index] = new
+
+                #add check at the end - if every value in the list is 'null', reset whole variable to 'null'
+                if new_caps == ['null' for _ in range(len(new_caps))]:
+                    presets['budget_caps'] = 'null'
+
+                else:
+                    presets['budget_caps'] = new_caps
+
+                    #check if there is an overflow budget set
+                    if presets['overflow_budget'] == '':
+                        print("You do not have an overflow budget set. To avoid potential errors, you will need to set one now.")
+                        to_change.insert(i+1, 'overflow_budget')
+
+        elif not isinstance(og_value, list):
             #if value is a single item
             #includes everything except accounts, budgets, and paycheck_split
 
@@ -902,7 +1297,7 @@ def changePresets(filepath=presetsFilepath):
                     inputType = 'csv'
                 elif variable == 'paycheck_account':
                     inputType = 'account'
-                elif variable == 'round_budget':
+                elif variable == 'round_budget' or variable == 'overflow_budget':
                     inputType = 'budget'
                 else:
                     inputType = 'name'
@@ -949,7 +1344,7 @@ def changePresets(filepath=presetsFilepath):
                     if len(budgets) > len(og_value):
                         for _ in range(len(budgets) - len(og_value)):
                             og_value.append(0)
-                    #arbitrarily remove values off the end of paycheck_split if its longer
+                    #arbitrarily remove values off the end of paycheck_split if it's longer
                     else:
                         for _ in range(len(og_value) - len(budgets)):
                             og_value.pop()
@@ -1041,13 +1436,13 @@ def changePresets(filepath=presetsFilepath):
                 #options are add, remove, or modify
                 print(f"\nYou can add, remove, or modify {variable}.")
                 #add
-                add = input(f"Would you like to add any {variable}? Y/N ").lower().strip()
+                add_var = input(f"Would you like to add any {variable}? Y/N ").lower().strip()
 
-                if add == 'exit':
+                if add_var == 'exit':
                     print(f"Exiting {variable} editing...")
                     continue#go to next entry in to_change
 
-                if add in {'y','yes','yee'}:
+                if add_var in {'y','yes','yee'}:
                     new_raw = input(f"Please enter the names of the new {variable} you "\
                                 "would like to add, separated by commas: ").strip().lower()
 
@@ -1088,9 +1483,11 @@ def changePresets(filepath=presetsFilepath):
                         presets[variable] += to_add
                         og_value = presets[variable]#reset for remove/modify
 
-                        #maintain paycheck_split
+                        #maintain paycheck_split/budget_caps
                         if variable == 'budgets':
                             presets['paycheck_split'] += [0] * len(to_add)
+                            if presets['budget_caps'] != 'null':
+                                presets['budget_caps'] += ['null'] * len(to_add)
 
                     printLine()
                     print(f"The following are your current {variable}:")
@@ -1121,13 +1518,12 @@ def changePresets(filepath=presetsFilepath):
                             #set all necessary variables to empty
                             presets[variable] = []
                             og_value = []
-                            if variable == 'budgets':#maintain paycheck_split
+                            if variable == 'budgets':#maintain paycheck_split/budget_caps
                                 presets['paycheck_split'] = []
+                                presets['budget_caps'] = 'null'
                             rest = False
 
                     if rest:
-                        # original_paycheck_split = presets['paycheck_split'][:]
-
                         rem = []
                         for r in rem_raw.split(","):
                             rem.append(r.strip())
@@ -1159,16 +1555,22 @@ def changePresets(filepath=presetsFilepath):
                             for name in to_rem:
                                 presets[variable].remove(name)
                             
-                            #maintain paycheck_split
+                            #maintain paycheck_split & budget_caps
                             if variable == 'budgets':
                                 #remove the corresponding paycheck split value, and check if it'll mess up total
                                 if name in original_budgets:
                                     deleted = presets['paycheck_split'].pop(original_budgets.index(name))
                                     if deleted != 0:
                                         must_edit_paycheck_split = True
+
+                                    if presets['budget_caps'] != 'null':
+                                        presets['budget_caps'].pop(original_budgets.index(name))
+
                                 else:
-                                    #if it was added this cycle, the paycheck_split is 0 appended to end
+                                    #if it was added this cycle, the split/cap is 0/null appended to end
                                     presets['paycheck_split'].pop()
+                                    if presets['budget_caps'] != 'null':
+                                        presets['budget_caps'].pop()
                         
                             og_value = presets[variable]#reset for later iterations
                     
@@ -1268,9 +1670,9 @@ def changePresets(filepath=presetsFilepath):
                             presets[variable][index] = mod_dict[name]
                         
                         og_value = presets[variable]#reset for later iterations
-                        #paycheck_split doesn't need to be updated here - will maintain split from previous budget name
+                        #paycheck_split/budget_caps don't need to be updated here - will maintain from previous budget name
                 
-                #maintain paycheck_split
+                #maintain paycheck_split/budget_caps
                 #lengths should be same b/c of maintaining throughout
                 if variable == 'budgets':
                     #not necessary to add if it's already been added by the user
@@ -1286,7 +1688,7 @@ def changePresets(filepath=presetsFilepath):
                             for i, el in enumerate(presets['paycheck_split']):
                                 print(f"{og_value[i]}\t{el}")
                             
-                            change = input("Would you like to change this split? Y/N ").lower()
+                            change = input("Would you like to change this split? Y/N ").strip().lower()
                             if change == 'y' or change == 'yes' or change == 'yee':
                                 must_edit_paycheck_split = True
                             else:
@@ -1294,7 +1696,19 @@ def changePresets(filepath=presetsFilepath):
                                 
                         if must_edit_paycheck_split:
                             #run paycheck_split immediately after this
-                            to_change.insert(i, 'paycheck_split')
+                            to_change.insert(i+1, 'paycheck_split')
+
+                    if presets['budget_caps'] != 'null':
+                        #check if added later
+                        if 'budget_caps' not in to_change[i:]:
+                            print("Since you edited budgets, your budget caps are now as follows:")
+                            for i, el in enumerate(og_value):
+                                print(f"{el}\t{presets['budget_caps'][i]}")
+
+                            change = input("Would you like to change any of these caps? Y/N ").strip().lower()
+                            if change in {'yes','yee','y'}:
+                                #run budget_caps after this
+                                to_change.insert(i+1, 'budget_caps')
             
             #for lists, cannot have no entries, must have at least 1
             if presets[variable] == []:
@@ -1314,6 +1728,13 @@ def changePresets(filepath=presetsFilepath):
         #put in expected format
         data = []
         for var, val in presets.items():
+            #change null budgets in budget_caps back to -1
+            if var == 'budget_caps':
+                if isinstance(val, list):
+                    for i, el in enumerate(val):
+                        if el == 'null':
+                            val[i] = -1
+
             #if list, change , to ;
             if isinstance(val, list):
                 val = str(val).replace(",", ";")
@@ -1405,9 +1826,53 @@ def transfer(filename=presets['transactions_file']):
     if amount is None:
         return
 
+    #check for overcapping budgets
+    if isinstance(presets["budget_caps"], list):
+        if budget_to != 'null':
+            if overcapCheck(budget_to,amount):
+                #then the transfer will overcap its destination budget
+                split_deposits = overcapProcedure(budget_to,amount)
+                if split_deposits is None:
+                    return
+                for deposit in split_deposits:
+                    writeTransaction([date,name,account_to]+deposit)
+                #also add withdrawal part
+                writeTransaction([date,name,account_from,budget_from,-1*amount])
+                return
+
+            elif overcapAmt(budget_to,amount) == 0:
+                print(f"The {budget_to} budget is now overcapped at {findBudgetCap(budget_to)}.")
+
     writeTransfer([date,name,account_from,budget_from,-1*amount], \
                   [date,name,account_to,budget_to,amount])
     
+def cappedBudgets(budget_caps):
+    """
+    given budget caps as a dict, returns a list of budgets that are capped
+
+    Parameters
+    ----------
+    budget_caps : dict
+        the budgets and their caps in the form {budget: cap}
+    
+    Returns
+    -------
+    list of capped budgets
+    """
+    transactions = filepathToTransactionList()
+
+    capped = list()
+    for budget in budget_caps:
+        cap = budget_caps[budget]
+        
+        if isinstance(cap, str):
+            #if 'null', never capped
+            pass
+        elif add(totalBudget(budget, transactions)) >= cap:
+            #then capped
+            capped.append(budget)
+    
+    return capped
 
 def paycheck(amount, filename=presets['transactions_file'], paycheckFile=presets['income_record_file']):
     """
@@ -1430,39 +1895,130 @@ def paycheck(amount, filename=presets['transactions_file'], paycheckFile=presets
 
     """
     #turn global dict variables into more convenient local ones
-    budgets = presets['budgets']
+    budgets = presets['budgets'][:]
     round_budget = presets['round_budget']
+    overflow_budget = presets['overflow_budget']
+
+    #make paycheck_split dict {budget_name: split}
+    paycheck_split = dict()
+    for i, budget in enumerate(budgets):
+        paycheck_split[budget] = presets['paycheck_split'][i]
+
+    #make budget caps dict {budget_name: budget_cap}, if turned on
+    if isinstance(presets['budget_caps'], str):
+        budget_caps = 'null'
+    else:
+        budget_caps = dict()
+        for i, budget in enumerate(budgets):
+            budget_caps[budget] = presets['budget_caps'][i]
     
     print("Type 'exit' to cancel paycheck input.")
     
     #ask for input
     paydate = input("Date of paycheck (MM-DD): ")
     paydate = checkInput(paydate,"date")
-    paycheck_account = input("Account the paycheck is in: ")
-    paycheck_account = checkInput(paycheck_account, "account")
     if paydate is None:
         return
+    paycheck_account = input("Account the paycheck is in: ")
+    paycheck_account = checkInput(paycheck_account, "account")
+    if paycheck_account is None:
+        return
     
-    #split amount
-    total = []
-    for i in range(len(budgets)):
-        total.append(round(amount*presets['paycheck_split'][i],2))
-        
-    #check
-    if int(round(sum(total), 2)*100) != int(amount*100):
-        dif = round(amount - round(sum(total), 2), 2)
-        total[budgets.index(round_budget)] += dif
-        count = 0
-        while round(sum(total), 2) != amount:
-            count += 1
-            total[budgets.index(round_budget)] += .01
+    #first check for capped budgets
+    if isinstance(budget_caps, dict):
+        #send to a function that returns a list of budgets that are capped
+        capped_budgets = cappedBudgets(budget_caps)
+
+        for budget in budgets[:]:
+            if budget in capped_budgets:
+                #remove from budgets and paycheck_split
+                print(f"The {budget} budget is currently capped at {budget_caps[budget]}.")
+                budgets.remove(budget)
+                del paycheck_split[budget]
+
+    #this will be the end amounts you add to each budget {budget_name: amount from paycheck}
+    total = {overflow_budget: 0, round_budget: 0}#these two must always be in the dict
+    for budget in budgets:
+        #only add budgets that have a value in paycheck_split
+        if paycheck_split[budget] != 0:
+            total[budget] = 0
+
+    #set redistribute amount to the initial amount of the paycheck
+    redistribute_amount = amount
+    overflow = False
+
+    #have to loop to redistribute remaining money into non-capped budgets
+    while redistribute_amount > 0:
+
+        #after removing budgets and their splits, paycheck_split might not sum to 1
+        #total paycheck_split list, scale up so it sums to 1, then divide paycheck
+        total_split = sum(paycheck_split.values())
+        if abs(total_split - 1) > .001:#account for float
+
+            #first, if 0, all capped and go into overflow budget
+            if total_split == 0:
+                print(f"All your budgets are capped. The remaining balance will be added to {overflow_budget}, your overflow budget.")
+                overflow = True
             
-        if round(sum(total), 2) != amount:
+            #multiply each value by 1/sum(paycheck_split)
+            else:
+                for budget in paycheck_split:
+                    paycheck_split[budget] *= 1/total_split
+
+        #split amount
+        if overflow:
+            total[overflow_budget] += round(redistribute_amount,2)
+        else:
+            for budget in budgets:
+                total[budget] += round(redistribute_amount*paycheck_split[budget],2)
+        redistribute_amount = 0#everything has been distributed
+
+        #check for overcapped budgets - skip if already overflowed
+        if budget_caps != 'null' and not overflow:
+            for budget in total:
+                #skip if this budget does not have a cap
+                if budget_caps[budget] != 'null':
+
+                    #find overall total in that budget
+                    new_total = add(totalBudget(budget, filepathToTransactionList())) + total[budget]
+                    if new_total > budget_caps[budget]:
+                        #overcapped
+                        overcap_amount = new_total - budget_caps[budget] #find out difference
+                        #find about paycheck overcapped it by
+                        # (don't want to automatically un-cap manually capped budgets)
+                        
+
+                        #remove the extra from what's being added from paycheck
+                        # (only if non-negative - )
+                        total[budget] = max(total[budget] - overcap_amount, 0)
+                        redistribute_amount += overcap_amount #add the extra to be redistributed
+
+                        #also remove that budget from the budgets list and paycheck split dict,
+                        # so that it won't get more distributed into it the next loop
+                        print(f"The {budget} budget is currently capped at {budget_caps[budget]}.")
+                        budgets.remove(budget)
+                        del paycheck_split[budget]
+
+    #check total sums to given amount
+    if int(round(sum(total.values()), 2)*100) != int(amount*100):
+        dif = round(amount - round(sum(total.values()), 2), 2)
+        #add to round_budget in total if there, add if not there
+        total[round_budget] = total.get(round_budget, 0) + dif
+
+        #idk why this is here but I'm afraid to remove it
+        #seems to be at risk of hitting an infinite loop
+        #I think this is making it sum to the correct amount
+        count = 0
+        while round(sum(total.values()), 2) != amount:
+            count += 1
+            total[round_budget] += .01
+        
+        if round(sum(total.values()), 2) != amount:
             statement = ""
-            for i in range(len(budgets)):
-                statement += "\n" + str(budgets[i]) + " = " + str(total[i])
+            for el in total:
+                statement += "\n" + str(el) + " = " + str(total[el])
                 
-            print("Does not add up, ask for help","\ntotal =", sum(total),statement)
+            print("Does not add up, ask for help","\ntotal =", sum(total.values()),statement)
             adds = False
         
         else:
@@ -1482,24 +2038,20 @@ def paycheck(amount, filename=presets['transactions_file'], paycheckFile=presets
         
         #add to transactions csv
         file = openFile(filename)
-        i = 0
-        for split in total:
-            if split != 0:
-                file = pandas_append(file, ["paycheck",paycheck_account,budgets[i],split], 
+        for budget in total:
+            if total[budget] != 0:
+                file = pandas_append(file, ["paycheck",paycheck_account,budget,total[budget]], 
                                      paydate, "date")
                 file.to_csv(filename)
-                
-                i += 1
 
 
 def getTransaction():
     """
-    ask user for transaction information (no intro print statement)
+    ask user for transaction information (no intro print statement) and writes it to the file
 
     Returns
     -------
-    a list of information in the format [date, name, account, budget, amount], 
-    or None if the user cancelled
+    None
     """
     print("Enter 'exit' at any time to cancel this transaction.")
     
@@ -1527,8 +2079,26 @@ def getTransaction():
     budget = checkInput(budget,"budget")
     if budget is None:
         return
+    
+    #check if this transaction will cap the destination budget
+    if amount > 0:
+        if isinstance(presets['budget_caps'], list):
+            if overcapCheck(budget,amount):
+                transactions = overcapProcedure(budget, amount)
+                #returns None if the user cancelled input, or
+                # list of [budget, amount] transactions to handle overcapping
+                if transactions is None:
+                    return
+                
+                for transaction in transactions:
+                    #write each returned transaction to the file
+                    writeTransaction([date, name, account] + transaction)
+                return
+                    
+            elif overcapAmt(budget, amount) == 0:
+                print(f"The {budget} budget is now capped at {findBudgetCap(budget)}.")
 
-    return [date, name, account, budget, amount]
+    writeTransaction([date, name, account, budget, amount])
 
 
 def weekly(filename=presets['transactions_file']):
@@ -1548,7 +2118,7 @@ def weekly(filename=presets['transactions_file']):
     """
     #add paycheck
     paycheckAsk = input("First we'll add the paycheck. Did you get a paycheck that you'd like to add? Y/N  ")
-    if paycheckAsk.lower() == "y" or paycheckAsk.lower() == "yes" or paycheckAsk.lower() == "yee":
+    if paycheckAsk.lower() in {'yes','y','yee'}:
         print("Please enter the following information about the paycheck.")
         amount = input("Amount: ")
         amount = checkInput(amount,"amount")
@@ -1599,9 +2169,7 @@ def weekly(filename=presets['transactions_file']):
         done = False
     while not done:
         printLine()
-        data = getTransaction()
-        if data is not None:
-            writeTransaction(data)
+        getTransaction()
         
         ask = input("Done? Y/N  ")
         if ask.lower() == "y" or ask.lower() == "yes" or ask.lower() == "yee":
@@ -1627,20 +2195,10 @@ def helper():
     """
     print("""
 --------------------
-2023 UPDATE NOTES:
-    -Presets (such as filenames, monthly rent, etc.) have been put into a separate 
-        csv file so the user can interact with the program to change them, rather 
-        than having to go into the code
-    -Initialization is now a function of the program and doesn't have to be done 
-        "manually" by the user
-    -Added functionality for going back if you typed something wrong
-    -Can now filter history by searching for something in the name
-    -Can also filter history by multiple filters
-    -Can now filter income records
-    -Can check all budgets or accounts at once
-    -Updated use of pandas to remove append (deprecated)
-    -Minor typos / rewording
-    -Easter eggs!
+LATEST UPDATE NOTES:
+    -Re-implemented budget caps
+    -Fixed the presets and init commands so that actually works
+    -other smaller changes/bug fixes
 
 help - shows this, a list of commands you can use and what they do
 
@@ -1679,13 +2237,13 @@ Ask Dani if you have any questions or need help! :)
           """)
         
 def __main__():
-    print("Welcome to Dani's Financial Manager 2023!")
+    print("Welcome to Dani's Financial Manager!")
     
     q = False
     
     while not q:
         printLine()
-                
+
         entry = input("Please enter a command. Type 'help' for options: ")
         entry = entry.lower()
         
@@ -1702,7 +2260,7 @@ def __main__():
             changePresets()
             
         elif entry == "budget":
-            budget = input("Please enter which budget you would like to check (type 'all' too see all budgets): ")
+            budget = input("Please enter which budget you would like to check (type 'all' to see all budgets): ")
             budget = checkInput(budget,"budget",True)
             if budget is not None:
                 #turn into a list if it isn't
@@ -1784,9 +2342,7 @@ def __main__():
                 done = False
             while not done:
                 printLine()
-                data = getTransaction()
-                if data is not None:
-                    writeTransaction(data)
+                getTransaction()
                 
                 ask = input("Done? Y/N  ")
                 if ask.lower() == "y" or ask.lower() == "yes" or ask.lower() == "yee":
