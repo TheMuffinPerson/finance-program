@@ -774,6 +774,80 @@ def init():
     printLine()
     print("Now are the budgets.")
     budg_amts = askEach(presets['budgets'])
+
+    #check for budgets that are over the cap
+    if isinstance(presets["budget_caps"],list):
+        for budget_i, budget in enumerate(presets['budgets']):
+            cap = findBudgetCap(budget)
+            if cap != 'null':
+                amount = budg_amts[budget_i]
+                if cap < amount:
+                    printLine()
+                    print(f"The {budget} budget has a cap of {cap}, and your given "\
+                          f"amount of {amount} exceeds that.")
+                    what_do = input(f"What would you like to do? You can enter 1 to "\
+                                    "ignore the set budget cap and allow the cap to "\
+                                    "be exceeded, enter 2 to only add an amount up to "\
+                                    "the cap and add the rest to a different budget, "\
+                                    "or enter 3 to cancel doing init entirely. 1/2/3 ").strip().lower()
+                    while what_do not in {"1","2","3","ignore","exit","cancel"}:
+                        what_do = input("This is not a valid options. Please choose 1, "\
+                                        "2, or 3 from the options listed above. 1/2/3 ").strip().lower()
+                    
+                    if what_do in {"3","exit","cancel"}:
+                        print("Okay, exiting init...")
+                        return
+                    
+                    elif what_do in {"1","ignore"}:
+                        print("This budget's cap will be ignored.")
+                        continue#next budget in for loop
+
+                    elif what_do in {"2"}:
+                        print(f"Okay, {cap} will be added to {budget}.")
+                        budg_amts[budget_i] = cap
+
+                        overcap_amt = amount - cap
+                        next_budget = input("Which budget would you like the remaining "\
+                                            f"amount of {overcap_amt} to be added to? ").strip().lower()
+                        next_budget = checkInput(next_budget,"budget")
+
+                        handled = False
+                        while not handled:
+                            next_budget_i = presets['budgets'].index(next_budget)
+
+                            #if budget has already been checked by this loop, must check now
+                            if next_budget in presets['budgets'][:budget_i]:
+                                next_budget_amt = budg_amts[next_budget_i]
+                                next_budget_cap = findBudgetCap(next_budget)
+
+                                if next_budget_amt + overcap_amt > next_budget_cap:
+                                    if next_budget_amt >= next_budget_cap:#already capped
+                                        print("This budget is already capped!")
+                                    else:
+                                        print(f"This will overcap the {next_budget} budget!")
+
+                                    add_anyway = input("Would you like to add anyway? Y/N ").strip().lower()
+                                    if add_anyway in {'y','yes','yee'}:
+                                        budg_amts[next_budget_i] += overcap_amt
+                                        handled = True
+
+                                    elif add_anyway == 'exit':
+                                        print("Exiting init...")
+                                        return
+                                    
+                                    else:
+                                        next_budget = input("Please choose another budget. ").strip().lower()
+                                        next_budget = checkInput(next_budget,"budget")
+                                        #then it'll rerun the while loop with the new next_budget
+
+                                else:#does not overcap next budget
+                                    budg_amts[next_budget_i] += overcap_amt
+                                    handled = True
+
+                            #if budget is yet to be checked by this loop, just add it
+                            else:
+                                budg_amts[next_budget_i] += overcap_amt
+                                handled = True
     
     #make sure total for accounts == total for budgets
     sum_acct = round(sum(acct_amts), 2)
@@ -2121,20 +2195,10 @@ def helper():
     """
     print("""
 --------------------
-2023 UPDATE NOTES:
-    -Presets (such as filenames, monthly rent, etc.) have been put into a separate 
-        csv file so the user can interact with the program to change them, rather 
-        than having to go into the code
-    -Initialization is now a function of the program and doesn't have to be done 
-        "manually" by the user
-    -Added functionality for going back if you typed something wrong
-    -Can now filter history by searching for something in the name
-    -Can also filter history by multiple filters
-    -Can now filter income records
-    -Can check all budgets or accounts at once
-    -Updated use of pandas to remove append (deprecated)
-    -Minor typos / rewording
-    -Easter eggs!
+LATEST UPDATE NOTES:
+    -Re-implemented budget caps
+    -Fixed the presets and init commands so that actually works
+    -other smaller changes/bug fixes
 
 help - shows this, a list of commands you can use and what they do
 
@@ -2179,7 +2243,7 @@ def __main__():
     
     while not q:
         printLine()
-                
+
         entry = input("Please enter a command. Type 'help' for options: ")
         entry = entry.lower()
         
