@@ -607,7 +607,6 @@ def checkInput(inp,typ,all_bool=False):
                 try:
                     #convert to a datetime object, then convert that to str and remove time at end
                     inp = str(datetime.strptime(date_str, year + '-%m-%d'))[:10]
-                    print(inp)#debug
 
                 except ValueError:
                     #format is incorrect
