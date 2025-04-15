@@ -313,7 +313,7 @@ def totalDate(start, end, transactionList):
     a list from the transaction list that are from that date range
     """
     def dateCond(transaction):
-        return transaction.getDate() >= start and transaction.getDate() < end
+        return transaction.getDate() >= start and transaction.getDate() <= end
             
     return total(dateCond, transactionList)
 
