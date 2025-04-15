@@ -1,18 +1,13 @@
 # -*- coding: utf-8 -*-
 """
 Created on Fri Dec 18 12:31:55 2020
-Last updated Mon Jan 15 2024
-
-@author: Dani Slavin
-
-Financial records 2023
 """
 global presetsFilepath
 presetsFilepath = 'presets.csv'
 
 import glob
 import pandas
-from datetime import date, timedelta
+from datetime import datetime, date, timedelta
 
 #need this func before global variables
 def loadPresets(filename=presetsFilepath):
@@ -48,12 +43,12 @@ def loadPresets(filename=presetsFilepath):
             
         elif val[0] == "[":#list
             L = val[1:-1].split(";")
-            val = []            ### :)
+            val = []
             #all elements can be str or float
             if L[0][0] == "'":#single quotation = string
                 for el in L:
                     val.append(str(el[1:-1]).strip("'"))#strip is in case there was a leading space
-            
+                        ### :)
             else:#float
                 for el in L:
                     val.append(float(el))
@@ -73,7 +68,7 @@ def loadPresets(filename=presetsFilepath):
 
 #global variables
 global today, presets
-today = str(date.today())[5:]
+today = str(date.today())
 presets = loadPresets(presetsFilepath)
 
 #each row of a csv is returned as a list of string elements
@@ -306,9 +301,9 @@ def totalDate(start, end, transactionList):
 
     Parameters
     ----------
-    start : string, format MM-DD
+    start : string, format YYYY-MM-DD
         string representation of a month in same format as transaction class object
-    end : string, format MM-DD
+    end : string, format YYYY-MM-DD
         same as start
     transactionList : list
         list of transaction class objects, the csv file transaction data
@@ -577,7 +572,6 @@ def checkInput(inp,typ,all_bool=False):
     
     if typ == "date":
         fail = True
-        count = 0
         while fail:
             fail = False
 
@@ -585,41 +579,40 @@ def checkInput(inp,typ,all_bool=False):
                 inp = today
                 break
 
-            try:
-                #if too short, assume lower month
-                if len(inp) == 4:
-                    inp = "0"+inp
-                
-                #wrong length
-                if len(inp) != 5:
-                    fail = True
-                    print("Please enter a date in the format MM-DD (it should be 5 characters long!).")
-                
-                #no hyphen
-                if inp[2] != "-" and not fail:
-                    fail = True
-                    print("Please enter a date in the format MM-DD (there should be a hyphen in the middle!).")
-                    
-                #month out of range
-                if (int(inp[:2]) < 1 or int(inp[:2]) > 12) and not fail:
-                    fail = True
-                    print("Please enter a valid month.")
-                
-                #day out of range
-                if (int(inp[3:]) < 1 or int(inp[3:]) > 31) and not fail:
-                    fail = True
-                    print("Please enter a valid day.")
-            
-            except ValueError:
-                #if they entered letters
-                count += 1
+            #want to get the input in the format YY-MM-DD or YYYY-MM-DD so you can use datetime.strptime
+            date_input = inp.split('-')
+
+            #no hyphen
+            if len(date_input) <= 1:
                 fail = True
-                print("Please only enter digits and a hyphen.")
-                if count >= 3:
-                    print("Like, dude, why you keep entering letters and stuff??")
+                print("Please enter a date with the numbers separated by hyphens!")
             
-            except IndexError:
-                fail = True
+            elif len(date_input) == 2:
+                #no year, add the current year
+                date_input.insert(0,today[0:4])
+
+            if len(date_input[0]) == 2:
+                #2 digit year, use %y for year when converting to datetime
+                year = '%y'
+            else:
+                year = '%Y'
+
+            if not fail:
+                #convert to a str w/ hyphens
+                date_str = str()
+                for el in date_input:
+                    date_str += el+'-'
+                date_str = date_str[:-1]
+
+                try:
+                    #convert to a datetime object, then convert that to str and remove time at end
+                    inp = str(datetime.strptime(date_str, year + '-%m-%d'))[:10]
+                    print(inp)#debug
+
+                except ValueError:
+                    #format is incorrect
+                    fail = True
+                    print("You've entered an invalid date. Please enter a date in the format (YYYY-)MM-DD.")
             
             if fail:
                 inp = input("Date (MM-DD): ")
@@ -2329,7 +2322,7 @@ def __main__():
             
             if not date_filter:
                 #only display the previous 30 days
-                filterList = totalDate(str(date.today() - timedelta(30))[5:], today, filterList)
+                filterList = totalDate(str(date.today() - timedelta(30)), today, filterList)
             printList(filterList)
 
         elif entry == "balance":
