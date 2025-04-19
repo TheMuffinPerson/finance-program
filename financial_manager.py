@@ -607,7 +607,6 @@ def checkInput(inp,typ,all_bool=False):
                 try:
                     #convert to a datetime object, then convert that to str and remove time at end
                     inp = str(datetime.strptime(date_str, year + '-%m-%d'))[:10]
-                    print(inp)#debug
 
                 except ValueError:
                     #format is incorrect
@@ -1258,9 +1257,10 @@ def changePresets(filepath=presetsFilepath):
                     presets['budget_caps'] = new_caps
 
                     #check if there is an overflow budget set
-                    if presets['overflow_budget'] == '':
-                        print("You do not have an overflow budget set. To avoid potential errors, you will need to set one now.")
-                        to_change.insert(i+1, 'overflow_budget')
+                    if 'overflow_budget' not in to_change[i:]:
+                        if presets['overflow_budget'] not in presets['budgets'] or presets['overflow_budget'] == '':
+                            print("Your current overflow budget is invalid. To avoid potential errors, you will need to set one now.")
+                            to_change.insert(i+1, 'overflow_budget')
 
         elif not isinstance(og_value, list):
             #if value is a single item
@@ -1724,6 +1724,7 @@ def changePresets(filepath=presetsFilepath):
             #change null budgets in budget_caps back to -1
             if var == 'budget_caps':
                 if isinstance(val, list):
+                    val = val[:]#make a copy so original presets is not edited
                     for i, el in enumerate(val):
                         if el == 'null':
                             val[i] = -1
