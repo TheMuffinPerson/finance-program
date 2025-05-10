@@ -1072,7 +1072,9 @@ def changePresets(filepath=presetsFilepath):
         "income_record_file": "The income record file is the file that records your income.",
         "accounts": "Accounts is a list of your accounts.",
         "budgets": "Budgets is a list of your budgets.",
-        "employer": "The employer is the name you give to the source of your income.",
+        "employer": "The employer is the name you give to the source of your income. This can "\
+            "be a list of multiple employers, in which case the program will ask before inputting "\
+            "the employer",
         "paycheck_account": "The paycheck account is which account, from your list, you "\
             "have your paycheck deposited into.",
         "paycheck_split": "The paycheck split is how you want your paycheck to be divided "\
@@ -1264,7 +1266,7 @@ def changePresets(filepath=presetsFilepath):
 
         elif not isinstance(og_value, list):
             #if value is a single item
-            #includes everything except accounts, budgets, and paycheck_split
+            #includes everything except accounts, budgets, paycheck_split, and employer
 
             csv_settings = {"transactions_file", "balance_checks_file", "income_record_file"}
 
@@ -1292,15 +1294,12 @@ def changePresets(filepath=presetsFilepath):
                     inputType = 'account'
                 elif variable == 'round_budget' or variable == 'overflow_budget':
                     inputType = 'budget'
-                else:
-                    inputType = 'name'
             #int
             else:
                 inputType = 'amount'
 
-            #make input lowercase unless it's a name (the employer preset)
-            if inputType != 'name':
-                new = new.lower()
+            #make input lowercase
+            new = new.lower()
 
             new_value = checkInput(new, inputType)
 
@@ -1416,114 +1415,215 @@ def changePresets(filepath=presetsFilepath):
                 
             #handle other lists
             else:
-                #can either be accounts or budgets, both are lists of strings
-
-                #make a copy of budgets list to manage paycheck_split properly
-                if variable == 'budgets':
-                    original_budgets = og_value[:]
-
-                print(f"These are your current {variable}:")
-                for val in og_value:
-                    print("\t",val)
-                
-                #options are add, remove, or modify
-                print(f"\nYou can add, remove, or modify {variable}.")
-                #add
-                add_var = input(f"Would you like to add any {variable}? Y/N ").lower().strip()
-
-                if add_var == 'exit':
-                    print(f"Exiting {variable} editing...")
-                    continue#go to next entry in to_change
-
-                if add_var in {'y','yes','yee'}:
-                    new_raw = input(f"Please enter the names of the new {variable} you "\
-                                "would like to add, separated by commas: ").strip().lower()
-
-                    if new_raw == 'exit':
-                        #just exit adding new budgets
-                        new = list()
-                        print(f"Exiting {variable} addition...")
-
+                #first handle employer
+                if variable == 'employer':
+                    #single employer
+                    if len(og_value) == 1:
+                        print(f"Your current employer is {og_value[0]}.")
+                    #list of employers
                     else:
-                        new = []
-                        for n in new_raw.split(","):
-                            new.append(n.strip())
+                        print("Your current employers are the following:")
+                        for employer in og_value:
+                            print("\t",employer)
                     
-                    to_add = list()
-                    exit = False
-                    for name in new:
-                        #make sure it's a new name
-                        while name in og_value:
-                            name = input(f"{name} is already in {variable}! Please enter a "\
-                                         "different name, or enter 'skip' to move on: ").lower().strip()
-                            if name == 'skip':
-                                break
-                            if name == 'exit':
-                                break
-
-                        if name == 'skip':
-                            continue
-                        elif name == 'exit':
-                            exit = True
-                            print(f"Exiting {variable} addition...")
-                            break#move on
-                        else:
-                            #passes checks
-                            to_add.append(name)
+                    change = input("Would you like to change this? Y/N ").lower().strip()
+                    if change in {'y','yes','yee'}:
+                        employers_input = input("Input the new employer. If you have multiple employers, separate each by a comma: ")
                         
-                    if not exit:
-                        #passes all checks, no exit, now add the whole thing to presets
-                        presets[variable] += to_add
-                        og_value = presets[variable]#reset for remove/modify
+                        if employers_input.strip().lower() == 'exit':
+                            print("Moving on...")
+                            continue
+                            
+                        else:
+                            employer = []
+                            for entry in employers_input.split(','):
+                                employer.append(entry.strip())
 
-                        #maintain paycheck_split/budget_caps
-                        if variable == 'budgets':
-                            presets['paycheck_split'] += [0] * len(to_add)
-                            if presets['budget_caps'] != 'null':
-                                presets['budget_caps'] += ['null'] * len(to_add)
+                            presets['employer'] = employer
 
-                    printLine()
-                    print(f"The following are your current {variable}:")
-                    for item in og_value:
-                        print("\t",item)
-                
-                #remove
-                rem = input(f"\nWould you like to remove one of the above {variable}? Y/N ").lower().strip()
-                if rem == 'exit':
-                    print(f"Exiting {variable} editing...")
-                    continue#going to the next variable in to_change
-                
-                if rem in {'y', 'yes', 'yee'}:
-                    rem_raw = input(f"Please enter the names of the {variable} you "\
-                                "would like to remove, separated by commas, or type 'all' "\
-                                f"to remove all {variable}: ").strip().lower()
+                else:
+                    #can either be accounts or budgets, both are lists of strings
+
+                    #make a copy of budgets list to manage paycheck_split properly
+                    if variable == 'budgets':
+                        original_budgets = og_value[:]
+
+                    print(f"These are your current {variable}:")
+                    for val in og_value:
+                        print("\t",val)
                     
-                    rest = True
+                    #options are add, remove, or modify
+                    print(f"\nYou can add, remove, or modify {variable}.")
+                    #add
+                    add_var = input(f"Would you like to add any {variable}? Y/N ").lower().strip()
 
-                    if rem_raw == 'exit':
-                        #exit just variable deletion
-                        print(f"Exiting {variable} deletion...")
-                        rest = False
+                    if add_var == 'exit':
+                        print(f"Exiting {variable} editing...")
+                        continue#go to next entry in to_change
 
-                    elif rem_raw == 'all':
-                        confirm = input(f"Are you sure you would like to remove all {variable}? Y/N ").lower().strip()
-                        if confirm in {'y', 'yes', 'yee'}:
-                            #set all necessary variables to empty
-                            presets[variable] = []
-                            og_value = []
-                            if variable == 'budgets':#maintain paycheck_split/budget_caps
-                                presets['paycheck_split'] = []
-                                presets['budget_caps'] = 'null'
+                    if add_var in {'y','yes','yee'}:
+                        new_raw = input(f"Please enter the names of the new {variable} you "\
+                                    "would like to add, separated by commas: ").strip().lower()
+
+                        if new_raw == 'exit':
+                            #just exit adding new budgets
+                            new = list()
+                            print(f"Exiting {variable} addition...")
+
+                        else:
+                            new = []
+                            for n in new_raw.split(","):
+                                new.append(n.strip())
+                        
+                        to_add = list()
+                        exit = False
+                        for name in new:
+                            #make sure it's a new name
+                            while name in og_value:
+                                name = input(f"{name} is already in {variable}! Please enter a "\
+                                            "different name, or enter 'skip' to move on: ").lower().strip()
+                                if name == 'skip':
+                                    break
+                                if name == 'exit':
+                                    break
+
+                            if name == 'skip':
+                                continue
+                            elif name == 'exit':
+                                exit = True
+                                print(f"Exiting {variable} addition...")
+                                break#move on
+                            else:
+                                #passes checks
+                                to_add.append(name)
+                            
+                        if not exit:
+                            #passes all checks, no exit, now add the whole thing to presets
+                            presets[variable] += to_add
+                            og_value = presets[variable]#reset for remove/modify
+
+                            #maintain paycheck_split/budget_caps
+                            if variable == 'budgets':
+                                presets['paycheck_split'] += [0] * len(to_add)
+                                if presets['budget_caps'] != 'null':
+                                    presets['budget_caps'] += ['null'] * len(to_add)
+
+                        printLine()
+                        print(f"The following are your current {variable}:")
+                        for item in og_value:
+                            print("\t",item)
+                    
+                    #remove
+                    rem = input(f"\nWould you like to remove one of the above {variable}? Y/N ").lower().strip()
+                    if rem == 'exit':
+                        print(f"Exiting {variable} editing...")
+                        continue#going to the next variable in to_change
+                    
+                    if rem in {'y', 'yes', 'yee'}:
+                        rem_raw = input(f"Please enter the names of the {variable} you "\
+                                    "would like to remove, separated by commas, or type 'all' "\
+                                    f"to remove all {variable}: ").strip().lower()
+                        
+                        rest = True
+
+                        if rem_raw == 'exit':
+                            #exit just variable deletion
+                            print(f"Exiting {variable} deletion...")
                             rest = False
 
-                    if rest:
-                        rem = []
-                        for r in rem_raw.split(","):
-                            rem.append(r.strip())
+                        elif rem_raw == 'all':
+                            confirm = input(f"Are you sure you would like to remove all {variable}? Y/N ").lower().strip()
+                            if confirm in {'y', 'yes', 'yee'}:
+                                #set all necessary variables to empty
+                                presets[variable] = []
+                                og_value = []
+                                if variable == 'budgets':#maintain paycheck_split/budget_caps
+                                    presets['paycheck_split'] = []
+                                    presets['budget_caps'] = 'null'
+                                rest = False
+
+                        if rest:
+                            rem = []
+                            for r in rem_raw.split(","):
+                                rem.append(r.strip())
+                        
+                            to_rem = list()
+                            exit = False
+                            for name in rem:
+                                #make sure it's an existing name
+                                while name not in og_value:
+                                    name = input(f"{name} is not in {variable}! Please enter an "\
+                                                "existing name, or enter 'skip' to move on: ").lower()
+                                    if name == 'skip':
+                                        break
+                                    elif name == 'exit':
+                                        break
+
+                                if name == 'skip':
+                                    continue
+                                elif name == 'exit':
+                                    exit = True
+                                    print(f"Exiting {variable} deletion...")
+                                    break#move on
+                                else:
+                                    #passes checks
+                                    to_rem.append(name)
+
+                            if not exit:
+                                #passes checks, no exit, now make changes
+                                for name in to_rem:
+                                    presets[variable].remove(name)
+                                
+                                #maintain paycheck_split & budget_caps
+                                if variable == 'budgets':
+                                    #remove the corresponding paycheck split value, and check if it'll mess up total
+                                    if name in original_budgets:
+                                        deleted = presets['paycheck_split'].pop(original_budgets.index(name))
+                                        if deleted != 0:
+                                            must_edit_paycheck_split = True
+
+                                        if presets['budget_caps'] != 'null':
+                                            presets['budget_caps'].pop(original_budgets.index(name))
+
+                                    else:
+                                        #if it was added this cycle, the split/cap is 0/null appended to end
+                                        presets['paycheck_split'].pop()
+                                        if presets['budget_caps'] != 'null':
+                                            presets['budget_caps'].pop()
+                            
+                                og_value = presets[variable]#reset for later iterations
+                        
+                        printLine()
+                        print(f"These are your current {variable}:")
+                        for item in og_value:
+                            print("\t",item)
+                        
+                    #modify
+                    mod = input(f"\nWould you like to modify one of the above {variable}? Y/N ").lower()
+                    if mod == 'exit':
+                        print(f"Exiting {variable} editing...")
+                        continue#go to the next to_change
                     
-                        to_rem = list()
+                    if mod in {'y','yes','yee'}:
+                        mod_raw = input(f"Please enter the names of the {variable} you "\
+                                    "would like to modify, separated by commas, or type "\
+                                    f"'all' to modify all {variable}: ").strip().lower()
+                                    
+                        if mod_raw == 'all':
+                            mod = og_value[:]
+
+                        elif mod_raw == 'exit':
+                            print(f"Exiting {variable} modification...")
+                            mod = []
+
+                        else:
+                            mod = []
+                            for m in mod_raw.split(","):
+                                mod.append(m.strip())
+                        
+                        to_mod = list()
                         exit = False
-                        for name in rem:
+                        for name in mod:
                             #make sure it's an existing name
                             while name not in og_value:
                                 name = input(f"{name} is not in {variable}! Please enter an "\
@@ -1537,133 +1637,59 @@ def changePresets(filepath=presetsFilepath):
                                 continue
                             elif name == 'exit':
                                 exit = True
-                                print(f"Exiting {variable} deletion...")
+                                print(f"Exiting {variable} modification...")
                                 break#move on
                             else:
                                 #passes checks
-                                to_rem.append(name)
+                                to_mod.append(name)
+
+                        #do another loop (if hasn't exited yet) for what to change the names to
+                        if not exit:
+                            mod_dict = dict()
+                            for name in to_mod:
+                                printLine()
+                                print(f"Working on modifying the {name} {variable[:-1]}.")
+
+                                new_name = input("Please enter the new name you would like to change "\
+                                                f"{name} to, or type 'skip' to not modify this {variable}: ").lower().strip()
+                                
+                                if new_name == 'exit':
+                                    print(f"Exiting {variable} modification...")
+                                    exit = True
+                                    break#move on
+
+                                elif new_name == 'skip':
+                                    continue
+
+                                #make sure it's a new name
+                                while new_name in og_value:
+                                    new_name = input(f"{new_name} is already in {variable}! Please "\
+                                                    "enter a different name, or enter 'skip' to move on: ").lower()
+                                    if new_name == 'skip':
+                                        break
+                                    elif new_name == 'exit':
+                                        break
+
+                                if new_name == 'skip':
+                                    continue
+                                elif new_name == 'exit':
+                                    exit = True
+                                    print(f"Exiting {variable} modification...")
+                                    break#move on
+
+                                #passes checks
+                                mod_dict[name] = new_name
 
                         if not exit:
-                            #passes checks, no exit, now make changes
-                            for name in to_rem:
-                                presets[variable].remove(name)
-                            
-                            #maintain paycheck_split & budget_caps
-                            if variable == 'budgets':
-                                #remove the corresponding paycheck split value, and check if it'll mess up total
-                                if name in original_budgets:
-                                    deleted = presets['paycheck_split'].pop(original_budgets.index(name))
-                                    if deleted != 0:
-                                        must_edit_paycheck_split = True
-
-                                    if presets['budget_caps'] != 'null':
-                                        presets['budget_caps'].pop(original_budgets.index(name))
-
-                                else:
-                                    #if it was added this cycle, the split/cap is 0/null appended to end
-                                    presets['paycheck_split'].pop()
-                                    if presets['budget_caps'] != 'null':
-                                        presets['budget_caps'].pop()
-                        
-                            og_value = presets[variable]#reset for later iterations
-                    
-                    printLine()
-                    print(f"These are your current {variable}:")
-                    for item in og_value:
-                        print("\t",item)
-                    
-                #modify
-                mod = input(f"\nWould you like to modify one of the above {variable}? Y/N ").lower()
-                if mod == 'exit':
-                    print(f"Exiting {variable} editing...")
-                    continue#go to the next to_change
-                
-                if mod in {'y','yes','yee'}:
-                    mod_raw = input(f"Please enter the names of the {variable} you "\
-                                "would like to modify, separated by commas, or type "\
-                                f"'all' to modify all {variable}: ").strip().lower()
+                            #passes checks, no exit, now change stuff
+                            for name in mod_dict:
                                 
-                    if mod_raw == 'all':
-                        mod = og_value[:]
-
-                    elif mod_raw == 'exit':
-                        print(f"Exiting {variable} modification...")
-                        mod = []
-
-                    else:
-                        mod = []
-                        for m in mod_raw.split(","):
-                            mod.append(m.strip())
-                    
-                    to_mod = list()
-                    exit = False
-                    for name in mod:
-                        #make sure it's an existing name
-                        while name not in og_value:
-                            name = input(f"{name} is not in {variable}! Please enter an "\
-                                         "existing name, or enter 'skip' to move on: ").lower()
-                            if name == 'skip':
-                                break
-                            elif name == 'exit':
-                                break
-
-                        if name == 'skip':
-                            continue
-                        elif name == 'exit':
-                            exit = True
-                            print(f"Exiting {variable} modification...")
-                            break#move on
-                        else:
-                            #passes checks
-                            to_mod.append(name)
-
-                    #do another loop (if hasn't exited yet) for what to change the names to
-                    if not exit:
-                        mod_dict = dict()
-                        for name in to_mod:
-                            printLine()
-                            print(f"Working on modifying the {name} {variable[:-1]}.")
-
-                            new_name = input("Please enter the new name you would like to change "\
-                                            f"{name} to, or type 'skip' to not modify this {variable}: ").lower().strip()
+                                #change old name to new_name
+                                index = presets[variable].index(name)
+                                presets[variable][index] = mod_dict[name]
                             
-                            if new_name == 'exit':
-                                print(f"Exiting {variable} modification...")
-                                exit = True
-                                break#move on
-
-                            elif new_name == 'skip':
-                                continue
-
-                            #make sure it's a new name
-                            while new_name in og_value:
-                                new_name = input(f"{new_name} is already in {variable}! Please "\
-                                                "enter a different name, or enter 'skip' to move on: ").lower()
-                                if new_name == 'skip':
-                                    break
-                                elif new_name == 'exit':
-                                    break
-
-                            if new_name == 'skip':
-                                continue
-                            elif new_name == 'exit':
-                                exit = True
-                                print(f"Exiting {variable} modification...")
-                                break#move on
-
-                            #passes checks
-                            mod_dict[name] = new_name
-
-                    if not exit:
-                        #passes checks, no exit, now change stuff
-                        for name in mod_dict:
-                            
-                            #change old name to new_name
-                            index = presets[variable].index(name)
-                            presets[variable][index] = mod_dict[name]
-                        
-                        og_value = presets[variable]#reset for later iterations
-                        #paycheck_split/budget_caps don't need to be updated here - will maintain from previous budget name
+                            og_value = presets[variable]#reset for later iterations
+                            #paycheck_split/budget_caps don't need to be updated here - will maintain from previous budget name
                 
                 #maintain paycheck_split/budget_caps
                 #lengths should be same b/c of maintaining throughout
@@ -1711,7 +1737,11 @@ def changePresets(filepath=presetsFilepath):
                     presets[variable] = [1]
                 else:
                     presets[variable] = ['filler']
-                    print(f"The singular {variable[:-1]} is called 'filler'.")
+                    if variable == 'employers':
+                        print("The singular employer is called 'filler'.")
+                    else:
+                        print(f"The singular {variable[:-1]} is called 'filler'.")
+
                     if variable == 'budgets':
                         presets['paycheck_split'] = [1]
 
@@ -1917,6 +1947,19 @@ def paycheck(amount, filename=presets['transactions_file'], paycheckFile=presets
     paycheck_account = checkInput(paycheck_account, "account")
     if paycheck_account is None:
         return
+    #ask for employer if necessary
+    employers = presets['employer']
+    if len(employers) == 1:
+        employer = employers[0]
+    else:
+        employer = input("Name of employer: ").strip()
+        while employer not in employers and employer.lower() != 'exit':
+            print(f"{employer} is not a valid employer. Employers include ", end = '')
+            print(*employers, sep = ', ', end = '')
+            employer = input(". Input is case-sensitive. ").strip()
+        if employer.lower() == 'exit':
+            print("Cancelling paycheck entry...")
+            return
     
     #first check for capped budgets
     if isinstance(budget_caps, dict):
@@ -2026,7 +2069,7 @@ def paycheck(amount, filename=presets['transactions_file'], paycheckFile=presets
     if adds:
         #add to paycheck csv
         payfile = openFile(paycheckFile)
-        payfile = pandas_append(payfile, [amount, presets['employer']], 
+        payfile = pandas_append(payfile, [amount, employer], 
                                 paydate, "date")
         payfile.to_csv(paycheckFile)
         
@@ -2034,7 +2077,7 @@ def paycheck(amount, filename=presets['transactions_file'], paycheckFile=presets
         file = openFile(filename)
         for budget in total:
             if total[budget] != 0:
-                file = pandas_append(file, ["paycheck",paycheck_account,budget,total[budget]], 
+                file = pandas_append(file, [f"{employer} paycheck",paycheck_account,budget,total[budget]], 
                                      paydate, "date")
                 file.to_csv(filename)
 
