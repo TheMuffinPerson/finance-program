@@ -5,9 +5,9 @@ accounts,['filler']
 budgets,['filler']
 budget_caps,'null'
 overflow_budget,''
-paycheck_split,[1]
+paycheck_split,[1.0]
 round_budget,''
 paycheck_account,''
-employer,''
-monthly_rent,0
-monthly_internet,0
+employer,['filler']
+monthly_rent,0.0
+monthly_internet,0.0
