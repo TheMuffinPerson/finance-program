@@ -1689,11 +1689,11 @@ def changePresets(filepath=presetsFilepath):
                                 mod_dict[name] = new_name
 
                         if not exit:
-							printLine()
-							printLine()
-							input("WARNING!! Modifying an account or budget name will not modify any previous transactions entered "\
-									"into that account or budget. It's recommended to open the transaction_history.csv file and find & "\
-									"replace any previous instances of the account/budget with the new name. Press Enter to confirm.")
+														printLine()
+														printLine()
+														input("WARNING!! Modifying an account or budget name will not modify any previous transactions entered "\
+																"into that account or budget. It's recommended to open the transaction_history.csv file and find & "\
+																"replace any previous instances of the account/budget with the new name. Press Enter to confirm.")
 
                             #passes checks, no exit, now change stuff
                             for name in mod_dict:
