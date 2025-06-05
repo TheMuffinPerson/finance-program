@@ -94,6 +94,14 @@ class transaction:
     def getAmount(self):
         amt = self.amount
         return amt
+    def setAccount(self, new):
+        self.account = new
+    def setBudget(self, new):
+        self.budget = new
+    def toList(self):
+        return [self.date, self.name, self.account, self.budget, self.amount]
+    def toStr(self):
+        return self.date + ',' + self.name + ',' + self.account + ',' + self.budget + ',' + str(self.amount)
     def __str__(self):
         nameCT = len(str(self.name))
         acctCT = len(str(self.account))
@@ -1656,9 +1664,14 @@ def changePresets(filepath=presetsFilepath):
 
                     if not exit:
                         #passes checks, no exit, now change stuff
+                        printLine()
+                        printLine()
+                        input("WARNING!! Modifying an account or budget name will not modify any previous transactions entered "\
+                                "into that account or budget. It's recommended to open the transaction_history.csv file and find & "\
+                                "replace any previous instances of the account/budget with the new name. Press Enter to confirm.")
+
                         for name in mod_dict:
-                            
-                            #change old name to new_name
+                            #change old name to new_name in presets
                             index = presets[variable].index(name)
                             presets[variable][index] = mod_dict[name]
                         
